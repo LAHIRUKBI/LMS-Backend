@@ -22,6 +22,7 @@ const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/materials', materialRoutes);
+app.use('/api/teacher', require('./routes/teacher'));
 
 //
 
