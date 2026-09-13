@@ -111,4 +111,46 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Admin ට සියලුම පාඩම් (ගුරුවරයාගේ විස්තර ද සමඟ) ලබා ගැනීම
+router.get('/admin/all', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+    // populate('teacherId', ...) හරහා Material එක upload කළ ගුරුවරයාගේ නම, email එක ලබා ගනී
+    const materials = await Material.find()
+      .populate('teacherId', 'name email teacherId')
+      .sort({ createdAt: -1 });
+      
+    res.json(materials);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// Admin ට පාඩමක Status එක (Approve/Reject) වෙනස් කිරීම
+router.put('/admin/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const { status, rejectReason } = req.body;
+
+    const updatedMaterial = await Material.findByIdAndUpdate(
+      req.params.id,
+      { status, rejectReason: rejectReason || "" },
+      { new: true }
+    );
+
+    if (!updatedMaterial) return res.status(404).json({ message: 'පාඩම සොයාගත නොහැක.' });
+
+    res.json({ message: `පාඩම සාර්ථකව ${status} කරන ලදී.`, material: updatedMaterial });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 module.exports = router;
