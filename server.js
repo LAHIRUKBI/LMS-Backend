@@ -23,6 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/teacher', require('./routes/teacher'));
+app.use('/profile_photos', express.static(path.join(__dirname, 'profile_photos')));
 
 //
 
