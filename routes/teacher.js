@@ -3,6 +3,27 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const Teacher = require('../models/Teacher');
 const authMiddleware = require('../middleware/authMiddleware');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+// ඡායාරූප සේව් වන Folder එක සෑදීම (නොමැති නම්)
+const uploadDir = 'profile_photos';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer Configuration (Unique ID එකක් සමඟ ෆොටෝ එක සේව් කිරීම)
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir + '/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueId = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueId + path.extname(file.originalname)); // උදා: 1691234567-12345.jpg
+  }
+});
+const upload = multer({ storage: storage });
 
 // 1. ගුරුවරයාගේ Profile විස්තර ලබාගැනීම
 router.get('/profile', authMiddleware, async (req, res) => {
@@ -18,14 +39,19 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// 2. Profile විස්තර යාවත්කාලීන කිරීම (Update)
-router.put('/profile', authMiddleware, async (req, res) => {
+// 2. Profile විස්තර යාවත්කාලීන කිරීම (Update) - upload.single('profilePhoto') යොදා ඇත
+router.put('/profile', authMiddleware, upload.single('profilePhoto'), async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
 
     const { teacherId, name, email, subject, phone, address, website, facebook, instagram, password } = req.body;
 
-    // වෙනත් ගුරුවරයෙක් මේ Teacher ID එක භාවිතා කරනවාදැයි පරීක්ෂා කිරීම
+    // Qualifications string එකක් විදිහට එන නිසා එය parse කරගැනීම
+    let parsedQualifications = [];
+    if (req.body.qualifications) {
+      parsedQualifications = JSON.parse(req.body.qualifications);
+    }
+
     if (teacherId) {
       const existing = await Teacher.findOne({ teacherId, _id: { $ne: req.user.id } });
       if (existing) {
@@ -33,10 +59,16 @@ router.put('/profile', authMiddleware, async (req, res) => {
       }
     }
 
-    // යාවත්කාලීන කළ යුතු දත්ත ලැයිස්තුව
-    const updateData = { teacherId, name, email, subject, phone, address, website, facebook, instagram };
+    const updateData = { 
+      teacherId, name, email, subject, phone, address, website, facebook, instagram, 
+      qualifications: parsedQualifications 
+    };
 
-    // ගුරුවරයා අලුත් මුරපදයක් ලබා දී ඇත්නම් පමණක් එය Hash කර යාවත්කාලීන කිරීම
+    // අලුත් ෆොටෝ එකක් අප්ලෝඩ් කර ඇත්නම් එහි unique නම (ID එක) දත්ත ගබඩාවට ලබාදීම
+    if (req.file) {
+      updateData.profilePhoto = req.file.filename;
+    }
+
     if (password && password.trim() !== "") {
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(password, salt);
