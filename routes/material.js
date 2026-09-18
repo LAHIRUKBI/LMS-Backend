@@ -112,15 +112,44 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// 4. Publish a material (Teacher Only)
+router.put('/:id/publish', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ message: 'Access denied. Only teachers can publish.' });
+    }
+
+    const material = await Material.findById(req.params.id);
+    if (!material) return res.status(404).json({ message: 'Material not found.' });
+
+    if (material.teacherId.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. You can only publish your own materials.' });
+    }
+
+    if (material.status !== 'approved') {
+      return res.status(400).json({ message: 'Only approved materials can be published.' });
+    }
+
+    // Set isPublished to true
+    material.isPublished = true;
+    await material.save();
+
+    res.json({ message: 'Material published successfully!', material });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // Admin ට සියලුම පාඩම් (ගුරුවරයාගේ විස්තර ද සමඟ) ලබා ගැනීම
 router.get('/admin/all', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Access denied.' });
     }
-    // populate('teacherId', ...) හරහා Material එක upload කළ ගුරුවරයාගේ නම, email එක ලබා ගනී
+    // populate එකට profilePhoto එක ද එකතු කර ඇත
     const materials = await Material.find()
-      .populate('teacherId', 'name email teacherId')
+      .populate('teacherId', 'name email teacherId profilePhoto')
       .sort({ createdAt: -1 });
       
     res.json(materials);
@@ -148,6 +177,37 @@ router.put('/admin/:id/status', authMiddleware, async (req, res) => {
     if (!updatedMaterial) return res.status(404).json({ message: 'පාඩම සොයාගත නොහැක.' });
 
     res.json({ message: `පාඩම සාර්ථකව ${status} කරන ලදී.`, material: updatedMaterial });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+
+// Admin විසින් පාඩමක් මකා දැමීමේ API එක
+router.delete('/admin/:id', authMiddleware, async (req, res) => {
+  try {
+    // Admin කෙනෙක් දැයි තහවුරු කිරීම
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය. Admin වරුන්ට පමණි.' });
+    }
+
+    const material = await Material.findById(req.params.id);
+    if (!material) {
+      return res.status(404).json({ message: 'මෙම පාඩම සොයාගත නොහැක.' });
+    }
+
+    // Server එකෙන් File එක මකා දැමීම
+    const filePath = path.join(__dirname, '..', material.fileUrl);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Database එකෙන් දත්තය මකා දැමීම
+    await Material.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'පාඩම Admin විසින් සාර්ථකව ඉවත් කරන ලදී.' });
+
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
