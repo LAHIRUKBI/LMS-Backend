@@ -29,30 +29,31 @@ const upload = multer({ storage: storage });
 // upload.single('file') මගින් Frontend එකෙන් එවන 'file' කියන දත්තය ලබාගනී
 router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
   try {
-    // Request එක එවා ඇත්තේ Teacher කෙනෙක්දැයි තහවුරු කර ගැනීම
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය. ගුරුවරුන්ට පමණක් Files Upload කළ හැක.' });
     }
 
-    const { title, type, subject } = req.body;
+    // අලුත් fields (grade, description) request body එකෙන් ලබාගැනීම
+    const { title, type, subject, grade, description } = req.body;
 
     if (!req.file) {
       return res.status(400).json({ message: 'කරුණාකර File එකක් ඇතුළත් කරන්න.' });
     }
 
-    // File එකේ URL එක හැදීම (උදා: /uploads/16900000-maths.pdf)
     const fileUrl = `/uploads/${req.file.filename}`;
 
     const newMaterial = new Material({
       title,
       type,
       subject,
+      grade,         // අලුතින් එකතු කරන ලදි
+      description,   // අලුතින් එකතු කරන ලදි
       fileUrl,
-      teacherId: req.user.id // Token එකෙන් ලබාගත් ගුරුවරයාගේ Object ID එක
+      teacherId: req.user.id
     });
 
     await newMaterial.save();
-    res.status(201).json({ message: 'පාඩම සාර්ථකව Upload කරන ලදී!', material: newMaterial });
+    res.status(201).json({ message: 'Document uploaded successfully!', material: newMaterial });
 
   } catch (err) {
     console.error(err.message);
