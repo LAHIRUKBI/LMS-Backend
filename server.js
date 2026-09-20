@@ -6,7 +6,11 @@ const bcrypt = require('bcryptjs');
 const Admin = require('./models/Admin');
 const adminRoutes = require('./routes/admin');
 const materialRoutes = require('./routes/material');
+const ticketRoutes = require('./routes/ticketRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const path = require('path');
+const { Server } = require('socket.io');
+const http = require('http');
 
 dotenv.config();
 const app = express();
@@ -24,6 +28,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/teacher', require('./routes/teacher'));
 app.use('/profile_photos', express.static(path.join(__dirname, 'profile_photos')));
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 //
 
@@ -74,3 +80,41 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
 });
+
+
+
+// HTTP server එක සෑදීම
+const server = http.createServer(app);
+
+// Socket.io Server එක සෑදීම
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000", // ඔබගේ Frontend URL එක
+    methods: ["GET", "POST"]
+  }
+});
+
+// Socket connection එක හැසිරවීම
+// server.js හි Socket connection හැසිරවීමේ කොටස
+io.on("connection", (socket) => {
+  console.log(`User Connected: ${socket.id}`);
+
+  // ගුරුවරයා තමන්ගේ ID එකෙන් Room එකකට Join වීම
+  socket.on("join_user_room", (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined room`);
+  });
+
+  // 👇 අලුතින් එක් කළ කොටස: Admin වරුන් Admin Room එකට Join වීම
+  socket.on("join_admin_room", () => {
+    socket.join("admin_room");
+    console.log("An Admin joined the admin_room");
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User Disconnected", socket.id);
+  });
+});
+
+// Routes වලට (ticketRoutes.js) Socket.io instance එක ලබා දීම
+app.set("io", io);
