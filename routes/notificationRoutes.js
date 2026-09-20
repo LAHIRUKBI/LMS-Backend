@@ -46,4 +46,47 @@ router.put('/admin/mark-read', authMiddleware, async (req, res) => {
   }
 });
 
+// 1. Admin ගේ සියලුම Notifications මකා දැමීම (Clear All)
+router.delete('/admin/clear-all', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied.' });
+    await Notification.deleteMany({ recipientRole: 'admin' });
+    res.json({ message: "All notifications cleared" });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
+
+// 2. Admin ගේ එක Notification එකක් පමණක් මකා දැමීම
+router.delete('/admin/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied.' });
+    await Notification.findByIdAndDelete(req.params.id);
+    res.json({ message: "Notification deleted" });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
+
+
+// 1. Teacher ගේ සියලුම Notifications මකා දැමීම (Clear All)
+router.delete('/clear-all', authMiddleware, async (req, res) => {
+  try {
+    await Notification.deleteMany({ userId: req.user.id });
+    res.json({ message: "All notifications cleared" });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
+
+// 2. Teacher ගේ තනි Notification එකක් මකා දැමීම
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    await Notification.findByIdAndDelete(req.params.id);
+    res.json({ message: "Notification deleted" });
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+});
+
 module.exports = router;
