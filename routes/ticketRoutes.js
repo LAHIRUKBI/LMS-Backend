@@ -72,6 +72,7 @@ router.post('/:id/reply', authMiddleware, async (req, res) => {
       const newNotif = new Notification({
         userId: ticket.teacherId,
         recipientRole: 'teacher',
+        ticketId: ticket._id,
         title: "New Ticket Reply",
         message: `Admin replied to your ticket: "${ticket.title}"`
       });
