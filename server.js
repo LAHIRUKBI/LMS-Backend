@@ -16,6 +16,8 @@ const teacherRoutes = require('./routes/teacher');
 const ticketRoutes = require('./routes/ticketRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 
+require('dotenv').config();
+
 dotenv.config();
 const app = express();
 
