@@ -7,6 +7,12 @@ const qualificationSchema = new mongoose.Schema({
   description: { type: String, default: "" }     // Additional details
 });
 
+// අලුතින් එකතු කළ Dynamic Social Media Schema එක
+const socialLinkSchema = new mongoose.Schema({
+  platform: { type: String, required: true }, // උදා: LinkedIn, Facebook, Instagram, Twitter
+  url: { type: String, required: true }      // අදාළ URL එක
+});
+
 const teacherSchema = new mongoose.Schema({
   teacherId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -17,8 +23,8 @@ const teacherSchema = new mongoose.Schema({
   phone: { type: String, default: "" },
   address: { type: String, default: "" },
   website: { type: String, default: "" },
-  facebook: { type: String, default: "" },
-  instagram: { type: String, default: "" },
+// පැරණි facebook සහ instagram වෙනුවට dynamic socialLinks array එක
+  socialLinks: [socialLinkSchema],
 
   // අලුතින් එකතු කළ කොටස්
   profilePhoto: { type: String, default: "" }, // Unique ID / Filename එක සේව් වීමට

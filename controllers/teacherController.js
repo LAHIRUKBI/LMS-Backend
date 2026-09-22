@@ -22,12 +22,17 @@ const updateTeacherProfile = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
 
-    const { teacherId, name, email, subject, phone, address, website, facebook, instagram, password } = req.body;
+    const { teacherId, name, email, subject, phone, address, website, password } = req.body;
 
-    // Qualifications string එකක් විදිහට එන නිසා එය parse කරගැනීම
     let parsedQualifications = [];
     if (req.body.qualifications) {
       parsedQualifications = JSON.parse(req.body.qualifications);
+    }
+
+    // Social Links parse කරගැනීම
+    let parsedSocialLinks = [];
+    if (req.body.socialLinks) {
+      parsedSocialLinks = JSON.parse(req.body.socialLinks);
     }
 
     if (teacherId) {
@@ -38,17 +43,15 @@ const updateTeacherProfile = async (req, res) => {
     }
 
     const updateData = { 
-      teacherId, name, email, subject, phone, address, website, facebook, instagram, 
+      teacherId, name, email, subject, phone, address, website, 
+      socialLinks: parsedSocialLinks,
       qualifications: parsedQualifications 
     };
 
-    // අලුත් ෆොටෝ එකක් අප්ලෝඩ් කර ඇත්නම්
     if (req.file) {
-      // 1. ගුරුවරයාගේ පැරණි profile photo එක database එකෙන් සොයා ගැනීම
       const currentTeacher = await Teacher.findById(req.user.id);
       if (currentTeacher && currentTeacher.profilePhoto) {
         const oldPhotoPath = path.join(__dirname, '../profile_photos', currentTeacher.profilePhoto);
-        // 2. ෆෝල්ඩරය තුළ පැරණි ගොනුව තිබේ නම් එය මකා දැමීම
         if (fs.existsSync(oldPhotoPath)) {
           try {
             fs.unlinkSync(oldPhotoPath);
@@ -57,8 +60,6 @@ const updateTeacherProfile = async (req, res) => {
           }
         }
       }
-
-      // 3. අලුත් ෆොටෝ එකේ නම updateData වෙත ලබාදීම
       updateData.profilePhoto = req.file.filename;
     }
 
