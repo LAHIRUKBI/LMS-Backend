@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 const materialSchema = new mongoose.Schema({
   title: { type: String, required: true },
   type: { type: String, enum: ['video', 'pdf', 'paper'], required: true }, 
-  fileUrl: { type: String, required: true }, 
+  fileUrl: { type: String, required: true },
+  coverImage: { type: String, default: "" }, 
   subject: { type: String, required: true }, 
   
   grade: { type: String, required: true },
