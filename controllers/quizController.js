@@ -1,4 +1,4 @@
-const Quiz = require('../models/Quiz');
+const Quiz = require('../models/Quizs');
 
 // 1. ගුරුවරයා විසින් Quiz එකක් සකසා Admin වෙත යැවීම
 exports.createQuiz = async (req, res) => {
