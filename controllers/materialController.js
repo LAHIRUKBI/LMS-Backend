@@ -11,11 +11,27 @@ const uploadMaterial = async (req, res) => {
 
     const { title, type, subject, grade, description } = req.body;
 
-    if (!req.file) {
-      return res.status(400).json({ message: 'කරුණාකර File එකක් ඇතුළත් කරන්න.' });
+    if (!req.files || !req.files['file']) {
+      return res.status(400).json({ message: 'කරුණාකර PDF File එකක් ඇතුළත් කරන්න.' });
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const pdfFile = req.files['file'][0];
+    const fileUrl = `/uploads/${pdfFile.filename}`;
+
+    let coverImageUrl = "";
+    if (req.files['coverImage']) {
+      const coverFile = req.files['coverImage'][0];
+      
+      // 5MB ට වඩා වැඩිදැයි පරීක්ෂා කිරීම (Multer limit එකට අමතරව අතිරේක පරීක්ෂාවක්)
+      if (coverFile.size > 5 * 1024 * 1024) {
+        // උඩුගත වූ PDF එකද ඉවත් කිරීම
+        fs.unlinkSync(path.join(__dirname, '..', fileUrl));
+        fs.unlinkSync(coverFile.path);
+        return res.status(400).json({ message: 'Cover image size must be less than 5MB.' });
+      }
+
+      coverImageUrl = `/PDF_covers/${coverFile.filename}`;
+    }
 
     const newMaterial = new Material({
       title,
@@ -24,11 +40,12 @@ const uploadMaterial = async (req, res) => {
       grade,
       description,
       fileUrl,
+      coverImage: coverImageUrl,
       teacherId: req.user.id
     });
 
     await newMaterial.save();
-    res.status(201).json({ message: 'Document uploaded successfully!', material: newMaterial });
+    res.status(201).json({ message: 'Document and cover image uploaded successfully!', material: newMaterial });
 
   } catch (err) {
     console.error(err.message);
