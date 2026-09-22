@@ -28,6 +28,7 @@ app.use(express.json());
 // Static Folders
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/profile_photos', express.static(path.join(__dirname, 'profile_photos')));
+app.use('/PDF_covers', express.static(path.join(__dirname, 'PDF_covers')));
 
 // API Routes
 app.use('/api/auth', authRoutes);
