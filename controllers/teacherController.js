@@ -56,7 +56,7 @@ const updateTeacherProfile = async (req, res) => {
       { new: true, runValidators: true }
     ).select('-password');
 
-    res.json({ message: 'ප්‍රොෆයිල් එක සාර්ථකව යාවත්කාලීන කරන ලදී!', teacher: updatedTeacher });
+    res.json({ message: 'The profile was successfully updated!', teacher: updatedTeacher });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

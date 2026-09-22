@@ -10,7 +10,7 @@ const qualificationSchema = new mongoose.Schema({
 const teacherSchema = new mongoose.Schema({
   teacherId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  email: { type: String, default: "",sparse: true },
+  email: { type: String, default: "",sparse: true, set: (v) => (v === "" ? null : v) },
   subject: { type: String, required: true },
   password: { type: String, required: true },
   
