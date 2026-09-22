@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const Teacher = require('../models/Teacher');
+const path = require('path');
+const fs = require('fs');
 
 // 1. ගුරුවරයාගේ Profile විස්තර ලබාගැනීම
 const getTeacherProfile = async (req, res) => {
@@ -40,8 +42,23 @@ const updateTeacherProfile = async (req, res) => {
       qualifications: parsedQualifications 
     };
 
-    // අලුත් ෆොටෝ එකක් අප්ලෝඩ් කර ඇත්නම් එහි unique නම (ID එක) දත්ත ගබඩාවට ලබාදීම
+    // අලුත් ෆොටෝ එකක් අප්ලෝඩ් කර ඇත්නම්
     if (req.file) {
+      // 1. ගුරුවරයාගේ පැරණි profile photo එක database එකෙන් සොයා ගැනීම
+      const currentTeacher = await Teacher.findById(req.user.id);
+      if (currentTeacher && currentTeacher.profilePhoto) {
+        const oldPhotoPath = path.join(__dirname, '../profile_photos', currentTeacher.profilePhoto);
+        // 2. ෆෝල්ඩරය තුළ පැරණි ගොනුව තිබේ නම් එය මකා දැමීම
+        if (fs.existsSync(oldPhotoPath)) {
+          try {
+            fs.unlinkSync(oldPhotoPath);
+          } catch (unlinkErr) {
+            console.error("Error deleting old profile photo:", unlinkErr);
+          }
+        }
+      }
+
+      // 3. අලුත් ෆොටෝ එකේ නම updateData වෙත ලබාදීම
       updateData.profilePhoto = req.file.filename;
     }
 
