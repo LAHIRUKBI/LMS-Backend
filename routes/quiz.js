@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const authMiddleware = require('../middleware/authMiddleware');
 const { 
   createQuiz, 
@@ -11,25 +14,36 @@ const {
   deleteTeacherQuiz
 } = require('../controllers/quizController');
 
-// ගුරුවරයා Quiz එකක් post කිරීම සඳහා
-router.post('/quizzes', authMiddleware, createQuiz);
+// Quize_images ෆෝල්ඩරය නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
+const quizImgDir = path.join(__dirname, '../Quize_images');
+if (!fs.existsSync(quizImgDir)) {
+  fs.mkdirSync(quizImgDir);
+}
 
-// ඇඩ්මින් සියලුම quizzes බැලීම සඳහා
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'Quize_images/'); // පින්තූර සේව් වන ෆෝල්ඩරය
+  },
+  filename: function (req, file, cb) {
+    // ෆයිල් එකේ නම වෙනස් වීම වැළැක්වීමට අද්විතීය නමක් ලබා දීම
+    cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-'));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB සීමාව
+});
+
+// upload.any() මඟින් frontend එකෙන් එවන සියලුම images සහ data එකවර ලබා ගනී
+router.post('/quizzes', authMiddleware, upload.any(), createQuiz);
+
 router.get('/admin/quizzes', authMiddleware, getPendingQuizzes);
-
-// ඇඩ්මින් status එක (approved/rejected) වෙනස් කිරීම සඳහා (හේතුව සමඟ)
 router.patch('/admin/quizzes/:id/status', authMiddleware, updateQuizStatus);
-
-// ඇඩ්මින් විසින් quiz එකක් මකා දැමීම සඳහා
 router.delete('/admin/quizzes/:id', authMiddleware, deleteQuizAdmin);
-
-// ගුරුවරයා තමන් සෑදූ quizzes බැලීම සඳහා
 router.get('/my-quizzes', authMiddleware, getMyQuizzes);
-
-// ගුරුවරයා විසින් quiz එක publish කිරීම සඳහා
 router.put('/:id/publish', authMiddleware, publishQuiz);
-
-// ගුරුවරයාට තමන්ගේ quiz එකක් මැකීමට
 router.delete('/:id', authMiddleware, deleteTeacherQuiz);
 
 module.exports = router;

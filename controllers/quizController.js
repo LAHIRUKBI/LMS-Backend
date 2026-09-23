@@ -1,13 +1,29 @@
 const Quiz = require('../models/Quizs');
 
-// 1. ගුරුවරයා විසින් Quiz එකක් සකසා Admin වෙත යැවීම
+// ගුරුවරයා විසින් Quiz එකක් (රූප සමඟ) සකසා Admin වෙත යැවීම
 exports.createQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
 
-    const { title, description, duration, questions } = req.body;
+    const { title, description, duration } = req.body;
+    let questions = JSON.parse(req.body.questions || '[]');
+
+    // req.files හරහා උඩුගත වූ පින්තූර පරීක්ෂා කර අදාළ ප්‍රශ්නයට path එක ලබා දීම
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        // Frontend එකෙන් 'questionImage_0', 'questionImage_1' ලෙස එවන fieldname එක පරීක්ෂා කරයි
+        const indexParts = file.fieldname.split('_');
+        if (indexParts.length === 2) {
+          const qIndex = parseInt(indexParts[1], 10);
+          if (questions[qIndex]) {
+            // MongoDB එකේ සේව් වන ආකෘතිය: /Quize_images/file_name.png
+            questions[qIndex].imageUrl = `/Quize_images/${file.filename}`;
+          }
+        }
+      });
+    }
 
     const newQuiz = new Quiz({
       teacherId: req.user.id,
@@ -26,68 +42,50 @@ exports.createQuiz = async (req, res) => {
   }
 };
 
-// 2. ඇඩ්මින් සඳහා අනුමැතිය අපේක්ෂිත Quiz ලැයිස්තුව ලබා ගැනීම
 exports.getPendingQuizzes = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
-
     const quizzes = await Quiz.find({})
       .populate('teacherId', 'name email teacherId profilePhoto')
       .sort({ createdAt: -1 });
-
     res.status(200).json(quizzes);
   } catch (error) {
-    console.error('Error fetching quizzes:', error);
     res.status(500).json({ success: false, error: 'දත්ත ලබාගැනීමේ දෝෂයක්.' });
   }
 };
 
-// 3. ඇඩ්මින් විසින් Quiz එක Approve හෝ Reject කිරීම (හේතුව සමඟ)
 exports.updateQuizStatus = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
-
     const { id } = req.params;
-    const { status, rejectReason } = req.body; // 'approved' හෝ 'rejected' සහ හේතුව
-
+    const { status, rejectReason } = req.body;
     const updatedQuiz = await Quiz.findByIdAndUpdate(
       id,
       { status, rejectReason: status === 'rejected' ? (rejectReason || "No reason provided") : "" },
       { new: true }
     ).populate('teacherId', 'name email teacherId profilePhoto');
-
-    if (!updatedQuiz) {
-      return res.status(404).json({ success: false, error: 'ප්‍රශ්න පත්‍රය හමුවී නැත.' });
-    }
-
-    res.status(200).json({ success: true, message: `ප්‍රශ්න පත්‍රය සාර්ථකව ${status} කරන ලදී.`, quiz: updatedQuiz });
+    res.status(200).json({ success: true, message: `ප්‍රශ්න පත්‍රය ${status} කරන ලදී.`, quiz: updatedQuiz });
   } catch (error) {
-    console.error('Error updating quiz status:', error);
-    res.status(500).json({ success: false, error: 'තත්ත්වය යාවත්කාලීන කිරීමේ දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
 };
 
-// 4. ඇඩ්මින් විසින් Quiz එකක් මකා දැමීම
 exports.deleteQuizAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
-
-    const deleted = await Quiz.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
-
-    res.status(200).json({ success: true, message: 'Quiz එක ඇඩ්මින් විසින් මකා දමන ලදී.' });
+    await Quiz.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'Quiz එක මකා දමන ලදී.' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'ማකා දැමීමේ දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
 };
 
-// 5. ගුරුවරයා තමන් සෑදූ quizzes ලබා ගැනීම
 exports.getMyQuizzes = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -100,49 +98,28 @@ exports.getMyQuizzes = async (req, res) => {
   }
 };
 
-// 6. Quiz එක Publish කිරීම (Approved වූ පසු පමණි)
 exports.publishQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
-
     const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
-
-    if (quiz.teacherId.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
-    }
-
-    if (quiz.status !== 'approved') {
-      return res.status(400).json({ success: false, message: 'අනුමත වූ (Approved) Quiz පමණක් Publish කළ හැක.' });
-    }
-
     quiz.isPublished = true;
     await quiz.save();
-
-    res.status(200).json({ success: true, message: 'Quiz එක සාර්ථකව Publish කරන ලදී!', quiz });
+    res.status(200).json({ success: true, message: 'Quiz එක Publish කරන ලදී!', quiz });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Publish කිරීමේ දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
 };
 
-// 7. ගුරුවරයාට තමන්ගේ Quiz එකක් මැකීමට
 exports.deleteTeacherQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
-    const quiz = await Quiz.findById(req.params.id);
-    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
-
-    if (quiz.teacherId.toString() !== req.user.id) {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
-    }
-
     await Quiz.findByIdAndDelete(req.params.id);
     res.status(200).json({ success: true, message: 'Quiz එක මකා දමන ලදී.' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දෝෂයක් සිදුව ඇත.' });
+    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
 };
