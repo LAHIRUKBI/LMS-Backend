@@ -3,8 +3,12 @@ const mongoose = require('mongoose');
 const studentSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  phone: { type: String }, // Phone number එක
-  password: { type: String }, // Google login හරහා එන අයට Password අවශ්‍ය නැත
+  phone: { type: String }, 
+  address: { type: String },
+  grade: { type: String },   
+  school: { type: String },  
+  profileImage: { type: String, default: "" }, // අලුතින් එකතු කළ කොටස
+  password: { type: String }, 
   authProvider: { type: String, enum: ['local', 'google'], default: 'local' }
 }, { timestamps: true });
 

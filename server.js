@@ -34,7 +34,7 @@ app.use('/profile_photos', express.static(path.join(__dirname, 'profile_photos')
 app.use('/PDF_covers', express.static(path.join(__dirname, 'PDF_covers')));
 app.use('/Quize_images', express.static(path.join(__dirname, 'Quize_images')));
 
-// API Routes
+// LMS System API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/materials', materialRoutes);
@@ -43,7 +43,9 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/quiz', quizRoutes);
 
+// Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
+app.use('/Student_profile_photos', express.static(path.join(__dirname, 'Student_profile_photos')));
 // MongoDB Connection එක කැඳවීම
 connectDB();
 
