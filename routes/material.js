@@ -49,5 +49,25 @@ router.put('/admin/:id/status', authMiddleware, updateMaterialStatus);
 router.delete('/admin/:id', authMiddleware, deleteMaterialAdmin);
 router.delete('/:id', authMiddleware, deleteMyMaterial);
 
+// ================= Student API =================
+
+// සිසුන්ට අනුමත වූ (Approved) සියලුම පාඩම් ලබා දීම
+router.get('/student/all', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+    
+    // status එක 'approved' වන ඒවා පමණක් ලබාගැනීම
+    const materials = await Material.find({ status: 'approved' })
+      .populate('teacherId', 'name subject') // ගුරුවරයාගේ නම ලබා ගැනීම
+      .sort({ createdAt: -1 });
+      
+    res.json(materials);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
 
 module.exports = router;

@@ -17,6 +17,8 @@ const ticketRoutes = require('./routes/ticketRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const quizRoutes = require('./routes/quiz');
 
+const studentAuthRoutes = require('./routes/studentAuth');
+
 require('dotenv').config();
 
 dotenv.config();
@@ -41,6 +43,7 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/quiz', quizRoutes);
 
+app.use('/api/auth', studentAuthRoutes);
 // MongoDB Connection එක කැඳවීම
 connectDB();
 
