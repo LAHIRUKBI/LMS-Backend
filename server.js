@@ -16,6 +16,7 @@ const teacherRoutes = require('./routes/teacher');
 const ticketRoutes = require('./routes/ticketRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const quizRoutes = require('./routes/quiz');
+const classRoutes = require('./routes/classRoutes');
 
 const studentAuthRoutes = require('./routes/studentAuth');
 
@@ -42,6 +43,8 @@ app.use('/api/teacher', teacherRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/quiz', quizRoutes);
+app.use('/api/classes', classRoutes);
+
 
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
