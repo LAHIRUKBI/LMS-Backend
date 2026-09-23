@@ -99,10 +99,6 @@ const addTeacher = async (req, res) => {
 // 2. Get All Teachers API
 const getAllTeachers = async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Permission denied!' });
-    }
-
     const teachers = await Teacher.find().select('-password').sort({ createdAt: -1 });
     res.json(teachers);
   } catch (err) {
