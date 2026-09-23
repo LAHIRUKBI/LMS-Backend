@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const Teacher = require('../models/Teacher');
 const Admin = require('../models/Admin');
+const Student = require('../models/Student');
 
 // 1. Add Teacher API (Admin ට පමණක් අවසර ඇත)
 const addTeacher = async (req, res) => {
@@ -179,11 +180,24 @@ const deleteTeacher = async (req, res) => {
   }
 };
 
+//6. සියලුම සිසුන්ගේ දත්ත ලබාගැනීමේ Controller Function එක
+const getAllStudents = async (req, res) => {
+  try {
+    // අලුත්ම සිසුන් මුලින් එන සේ (createdAt: -1) සහ password එක අයින් කර දත්ත ලබා ගැනීම
+    const students = await Student.find().sort({ createdAt: -1 }).select('-password');
+    res.json(students);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
 // අදාල Functions සියල්ල Export කිරීම
 module.exports = {
   addTeacher,
   getAllTeachers,
   getAllAdmins,
   deleteAdmin,
-  deleteTeacher
+  deleteTeacher,
+  getAllStudents
 };
