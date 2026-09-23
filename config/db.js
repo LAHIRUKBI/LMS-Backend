@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const Admin = require('../models/Admin'); // Path එක නිවැරදිව ලබා දී ඇත
+const Admin = require('../models/Admin');
 
 const createDefaultAdmin = async () => {
   try {
@@ -18,9 +18,9 @@ const createDefaultAdmin = async () => {
       });
 
       await defaultAdmin.save();
-      console.log('✅ Default Admin නිර්මාණය කළා! (ID: admin, Password: 1234)');
+      console.log('✅ Default Admin created : (ID: admin, Password: 1234)');
     } else {
-      console.log('⚡ Default Admin දැනටමත් පද්ධතියේ සිටී.');
+      console.log('✅ The default admin already exists in the system.');
     }
   } catch (error) {
     console.log('❌ Default Admin සෑදීමේදී දෝෂයක්: ', error);
@@ -34,7 +34,7 @@ const connectDB = async () => {
     await createDefaultAdmin(); 
   } catch (err) {
     console.log('❌ MongoDB Connection Error: ', err);
-    process.exit(1); // Error එකක් ආවොත් process එක නවත්වන්න
+    process.exit(1);
   }
 };
 
