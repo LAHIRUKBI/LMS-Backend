@@ -1,4 +1,5 @@
 const Quiz = require('../models/Quizs');
+const QuizSubmission = require('../models/QuizSubmission');
 
 // ගුරුවරයා විසින් Quiz එකක් (රූප සමඟ) සකසා Admin වෙත යැවීම
 exports.createQuiz = async (req, res) => {
@@ -165,6 +166,143 @@ exports.getQuizById = async (req, res) => {
     res.status(200).json(quiz);
   } catch (error) {
     console.error("Quiz ලබා ගැනීමේ දෝෂයක්:", error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+
+// සිසුවෙකු විසින් Quiz එකක් Submit කිරීම
+exports.submitQuiz = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const quizId = req.params.id;
+    const studentId = req.user.id;
+    const { answers, timeTaken } = req.body;
+
+    const existingSub = await QuizSubmission.findOne({ quizId, studentId });
+    if (existingSub) {
+      return res.status(400).json({ success: false, message: 'ඔබ දැනටමත් මෙම Quiz එක සම්පූර්ණ කර ඇත. එය කළ හැක්කේ එක් වරක් පමණි.' });
+    }
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
+
+    let mcqScore = 0;
+    let maxScore = 0;
+    let hasEssay = false;
+
+    quiz.questions.forEach((q) => {
+      const qId = q._id.toString();
+      maxScore += q.marks || 5;
+      if (q.type === 'mcq' || q.type === 'short') {
+        const studentAns = answers[qId] || "";
+        if (studentAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()) {
+          mcqScore += q.marks || 5;
+        }
+      } else if (q.type === 'essay') {
+        hasEssay = true;
+      }
+    });
+
+    const newSub = new QuizSubmission({
+      quizId,
+      studentId,
+      answers, // plain object ලෙස save වේ
+      score: mcqScore,
+      maxScore,
+      isEvaluated: !hasEssay,
+      timeTaken
+    });
+
+    await newSub.save();
+    res.status(200).json({ success: true, message: 'සාර්ථකව ඉදිරිපත් කරන ලදී!', score: mcqScore, maxScore });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+// ගුරුවරයාට අදාළ Quiz එකේ සියලුම Student Submissions ලබා ගැනීම
+exports.getQuizSubmissions = async (req, res) => {
+  try {
+    const quizId = req.params.id;
+    const submissions = await QuizSubmission.find({ quizId })
+      .populate('studentId', 'name email profileImage')
+      .sort({ createdAt: -1 });
+    res.json(submissions);
+  } catch (err) {
+    res.status(500).send('Server Error');
+  }
+};
+
+// ගුරුවරයා විසින් Paper එක චෙක් කිරීම සහ Essay ලකුණු Calculate කර Save කිරීම
+exports.evaluateEssay = async (req, res) => {
+  try {
+    const { submissionId, essayMarks } = req.body; 
+    const sub = await QuizSubmission.findById(submissionId);
+    if (!sub) return res.status(404).json({ message: 'Submission not found' });
+
+    sub.essayMarks = essayMarks;
+    
+    const quiz = await Quiz.findById(sub.quizId);
+    let mcqOnlyScore = 0;
+
+    const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
+
+    quiz.questions.forEach((q) => {
+      const qId = q._id.toString();
+      if (q.type === 'mcq' || q.type === 'short') {
+        const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
+        const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
+
+        // නම්‍යශීලී ලෙස සංසන්දනය කිරීම (උදා: 'b. ram' හෝ 'ram' යන දෙකම නිවැරදි ලෙස ගැනීම සඳහා)
+        // මෙහිදී අකුර පමණක් හෝ වචනය පමණක් උපුටාගෙන පරීක්ෂා කරයි
+        const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
+        const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
+
+        if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(cleanStudent)) {
+          mcqOnlyScore += q.marks || 5;
+        }
+      }
+    });
+
+    let totalEssayMarks = 0;
+    if (essayMarks) {
+      totalEssayMarks = Object.values(essayMarks).reduce((a, b) => Number(a) + Number(b), 0);
+    }
+
+    sub.score = mcqOnlyScore + totalEssayMarks;
+    sub.isEvaluated = true;
+    await sub.save();
+
+    res.json({ success: true, message: 'ලකුණු සාර්ථකව ගණනය කර සේව් කරන ලදී!', sub });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// සිසුවෙක් දැනටමත් මෙම Quiz එක කර ඇද්දැයි පරීක්ෂා කිරීම
+exports.checkQuizSubmission = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const quizId = req.params.id;
+    const studentId = req.user.id;
+
+    const submission = await QuizSubmission.findOne({ quizId, studentId });
+    if (submission) {
+      return res.status(200).json({ submitted: true, message: 'ඔබ දැනටමත් මෙම Quiz එක සම්පූර්ණ කර ඇත.' });
+    }
+
+    res.status(200).json({ submitted: false });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };

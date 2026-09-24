@@ -13,7 +13,11 @@ const {
   publishQuiz,
   deleteTeacherQuiz,
   getQuizzesByClass,
-  getQuizById
+  getQuizById,
+  submitQuiz,
+  getQuizSubmissions,
+  evaluateEssay,
+  checkQuizSubmission
 } = require('../controllers/quizController');
 
 // Quize_images ෆෝල්ඩරය නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
@@ -40,7 +44,6 @@ const upload = multer({
 
 // upload.any() මඟින් frontend එකෙන් එවන සියලුම images සහ data එකවර ලබා ගනී
 router.post('/quizzes', authMiddleware, upload.any(), createQuiz);
-
 router.get('/admin/quizzes', authMiddleware, getPendingQuizzes);
 router.patch('/admin/quizzes/:id/status', authMiddleware, updateQuizStatus);
 router.delete('/admin/quizzes/:id', authMiddleware, deleteQuizAdmin);
@@ -50,7 +53,15 @@ router.delete('/:id', authMiddleware, deleteTeacherQuiz);
 
 // පන්තිවලට අදාළව Quiz ලබා දීමේ අලුත් Route එක
 router.get('/class/:classId', authMiddleware, getQuizzesByClass);
-// නිශ්චිත Quiz එකක් ලබා ගැනීමේ route එක
+
+
+// Student Submission & Evaluation Routes
+router.post('/:id/submit', authMiddleware, submitQuiz);
+router.get('/:id/submissions', authMiddleware, getQuizSubmissions);
+router.post('/evaluate-essay', authMiddleware, evaluateEssay);
+
+// මේක හැම විටම පහළින්ම තිබිය යුතුය (/:id නිසා අනෙක් route වලට බාධා නොවීම පිණිස)
 router.get('/:id', authMiddleware, getQuizById);
+router.get('/:id/check-submission', authMiddleware, checkQuizSubmission);
 
 module.exports = router;
