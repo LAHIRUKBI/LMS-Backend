@@ -97,12 +97,34 @@ exports.googleAuthStudent = async (req, res) => {
 exports.updateStudentProfile = async (req, res) => {
   try {
     const userId = req.user.id; 
-    const { name, phone, address, grade, school } = req.body;
+    // නව ක්ෂේත්‍ර ද Destructure කර ලබා ගැනීම
+    const { 
+      name, 
+      phone, 
+      address, 
+      grade, 
+      school, 
+      country, 
+      timeZone, 
+      medium, 
+      parentName, 
+      parentPhone 
+    } = req.body;
 
-    // යාවත්කාලීන කළ යුතු දත්ත
-    let updateData = { name, phone, address, grade, school };
+    // යාවත්කාලීන කළ යුතු දත්ත ලැයිස්තුව
+    let updateData = { 
+      name, 
+      phone, 
+      address, 
+      grade, 
+      school, 
+      country, 
+      timeZone, 
+      medium, 
+      parentName, 
+      parentPhone 
+    };
 
-    // පින්තූරයක් Upload කර ඇත්නම් එයද updateData වලට එකතු කරන්න
     if (req.file) {
       updateData.profileImage = `/Student_profile_photos/${req.file.filename}`;
     }
