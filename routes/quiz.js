@@ -11,7 +11,8 @@ const {
   deleteQuizAdmin,
   getMyQuizzes, 
   publishQuiz,
-  deleteTeacherQuiz
+  deleteTeacherQuiz,
+  getQuizzesByClass
 } = require('../controllers/quizController');
 
 // Quize_images ෆෝල්ඩරය නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
@@ -45,5 +46,8 @@ router.delete('/admin/quizzes/:id', authMiddleware, deleteQuizAdmin);
 router.get('/my-quizzes', authMiddleware, getMyQuizzes);
 router.put('/:id/publish', authMiddleware, publishQuiz);
 router.delete('/:id', authMiddleware, deleteTeacherQuiz);
+
+// පන්තිවලට අදාළව Quiz ලබා දීමේ අලුත් Route එක
+router.get('/class/:classId', authMiddleware, getQuizzesByClass);
 
 module.exports = router;

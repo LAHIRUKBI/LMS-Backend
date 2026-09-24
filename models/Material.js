@@ -16,7 +16,8 @@ const materialSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   rejectReason: { type: String, default: "" },
 
-  // අලුතින් එකතු කල Publish තත්වය
+  // පන්ති IDs ගබඩා කිරීම සඳහා Array එකක් (Publish කළ පන්ති)
+  classIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }],
   isPublished: { type: Boolean, default: false } 
 }, { timestamps: true });
 
