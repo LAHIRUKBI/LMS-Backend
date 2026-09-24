@@ -154,3 +154,17 @@ exports.getQuizzesByClass = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
+// ID එක මඟින් නිශ්චිත Quiz එකක් ලබා ගැනීම
+exports.getQuizById = async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
+    }
+    res.status(200).json(quiz);
+  } catch (error) {
+    console.error("Quiz ලබා ගැනීමේ දෝෂයක්:", error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
