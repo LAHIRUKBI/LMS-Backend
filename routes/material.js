@@ -6,7 +6,8 @@ const fs = require('fs');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // Controller ගොනුවෙන් functions ඉම්පෝර්ට් කරගැනීම
-const {uploadMaterial,getMyMaterials,deleteMyMaterial,publishMaterial,getAllMaterialsAdmin,updateMaterialStatus,deleteMaterialAdmin} = require('../controllers/materialController');
+const {uploadMaterial,getMyMaterials,deleteMyMaterial,publishMaterial,getAllMaterialsAdmin,updateMaterialStatus,deleteMaterialAdmin, getMaterialsByClass,
+  getStudentMaterials} = require('../controllers/materialController');
 
 // 'uploads' folder එක නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
 const uploadDir = path.join(__dirname, '../uploads');
@@ -44,6 +45,8 @@ router.get('/my-materials', authMiddleware, getMyMaterials);
 router.get('/admin/all', authMiddleware, getAllMaterialsAdmin);
 
 // Parameter සහිත routes පහළින් තැබීම වඩාත් සුදුසුයි
+router.get('/student/all', authMiddleware, getStudentMaterials);
+router.get('/class/:classId', authMiddleware, getMaterialsByClass);
 router.put('/:id/publish', authMiddleware, publishMaterial);
 router.put('/admin/:id/status', authMiddleware, updateMaterialStatus);
 router.delete('/admin/:id', authMiddleware, deleteMaterialAdmin);

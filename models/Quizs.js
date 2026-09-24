@@ -19,6 +19,7 @@ const quizSchema = new mongoose.Schema({
   questions: [questionSchema],
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   rejectReason: { type: String, default: "" }, // ප්‍රතික්ෂේප වීමට හේතුව
+  classIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }], // පන්ති IDs ගබඩා කිරීම සඳහා Array එකක් (Materials වල මෙන්) අලුතින් එක් කළා
   isPublished: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });

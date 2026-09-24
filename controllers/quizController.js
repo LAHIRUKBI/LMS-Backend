@@ -103,8 +103,20 @@ exports.publishQuiz = async (req, res) => {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
+    
+    // Materials වල මෙන්ම පන්ති වලට publish කිරීමට classIds ලබා ගැනීම
+    const { classIds } = req.body; 
     const quiz = await Quiz.findById(req.params.id);
-    quiz.isPublished = true;
+    if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
+
+    if (classIds && Array.isArray(classIds) && classIds.length > 0) {
+      quiz.classIds = classIds;
+      quiz.isPublished = true;
+    } else {
+      quiz.classIds = [];
+      quiz.isPublished = false;
+    }
+
     await quiz.save();
     res.status(200).json({ success: true, message: 'Quiz එක Publish කරන ලදී!', quiz });
   } catch (error) {
@@ -121,5 +133,24 @@ exports.deleteTeacherQuiz = async (req, res) => {
     res.status(200).json({ success: true, message: 'Quiz එක මකා දමන ලදී.' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'දෝෂයක්.' });
+  }
+};
+
+// පන්තියකට අදාළ Quizzes ලබා දීම (Export කර නිවැරදි කළා)
+exports.getQuizzesByClass = async (req, res) => {
+  try {
+    const classId = req.params.classId;
+    
+    // Quizs වෙනුවට Quiz භාවිතා කර ඇත. අනුමත (approved) වූ ඒවා පමණක් යවයි
+    const quizzes = await Quiz.find({ 
+      classIds: classId,
+      isPublished: true,
+      status: 'approved' 
+    }).sort({ createdAt: -1 });
+
+    res.json(quizzes);
+  } catch (err) {
+    console.error("Quizzes ලබා ගැනීමේ දෝෂයක්:", err);
+    res.status(500).send('Server Error');
   }
 };

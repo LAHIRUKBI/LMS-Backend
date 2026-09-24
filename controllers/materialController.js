@@ -98,13 +98,14 @@ const deleteMyMaterial = async (req, res) => {
   }
 };
 
-// 4. Publish a material (Teacher Only)
+// 4. Publish a material to selected classes (Teacher Only)
 const publishMaterial = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ message: 'Access denied. Only teachers can publish.' });
     }
 
+    const { classIds } = req.body; // පන්ති IDs Array එකක් ලෙස ලබා ගැනීම
     const material = await Material.findById(req.params.id);
     if (!material) return res.status(404).json({ message: 'Material not found.' });
 
@@ -116,8 +117,18 @@ const publishMaterial = async (req, res) => {
       return res.status(400).json({ message: 'Only approved materials can be published.' });
     }
 
-    material.isPublished = true;
+    // classIds ලබා දී ඇත්නම් සහ හිස් නොවේ නම් publish කිරීම
+    if (classIds && Array.isArray(classIds) && classIds.length > 0) {
+      material.classIds = classIds;
+      material.isPublished = true;
+    } else {
+      material.classIds = [];
+      material.isPublished = false;
+    }
+
     await material.save();
+    // Student web application එකට පෙන්වීම සඳහා populate කර යැවීම
+    await material.populate('classIds', 'grade medium mode day startTime endTime');
 
     res.json({ message: 'Material published successfully!', material });
   } catch (err) {
@@ -194,6 +205,43 @@ const deleteMaterialAdmin = async (req, res) => {
   }
 };
 
+// 8. පන්තියකට අදාළව Publish කර ඇති materials ලබා ගැනීම
+const getMaterialsByClass = async (req, res) => {
+  try {
+    const classId = req.params.classId;
+    // classIds අඩංගු සහ status approved වූ materials ලබා ගැනීම
+    const materials = await Material.find({ 
+      classIds: classId, 
+      isPublished: true, 
+      status: 'approved' 
+    }).populate('teacherId', 'name subject').sort({ createdAt: -1 });
+
+    res.json(materials);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 9. සිසුන්ට අනුමත වූ (Approved) සියලුම පාඩම් ලබා දීම (Student API)
+const getStudentMaterials = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+    
+    // status එක 'approved' වන ඒවා පමණක් ලබාගැනීම
+    const materials = await Material.find({ status: 'approved' })
+      .populate('teacherId', 'name subject') // ගුරුවරයාගේ නම ලබා ගැනීම
+      .sort({ createdAt: -1 });
+      
+    res.json(materials);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
 module.exports = {
   uploadMaterial,
   getMyMaterials,
@@ -201,5 +249,7 @@ module.exports = {
   publishMaterial,
   getAllMaterialsAdmin,
   updateMaterialStatus,
-  deleteMaterialAdmin
+  deleteMaterialAdmin,
+  getMaterialsByClass,
+  getStudentMaterials
 };
