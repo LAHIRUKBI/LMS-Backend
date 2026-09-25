@@ -1,7 +1,7 @@
 const Quiz = require('../models/Quizs');
 const QuizSubmission = require('../models/QuizSubmission');
 
-// ගුරුවරයා විසින් Quiz එකක් (රූප සමඟ) සකසා Admin වෙත යැවීම
+// The teacher prepares a quiz (with images) and sends it to the admin.
 exports.createQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -11,15 +11,14 @@ exports.createQuiz = async (req, res) => {
     const { title, description, duration } = req.body;
     let questions = JSON.parse(req.body.questions || '[]');
 
-    // req.files හරහා උඩුගත වූ පින්තූර පරීක්ෂා කර අදාළ ප්‍රශ්නයට path එක ලබා දීම
+    // Checking the images uploaded via `req.files` and providing the path for the relevant question.
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
-        // Frontend එකෙන් 'questionImage_0', 'questionImage_1' ලෙස එවන fieldname එක පරීක්ෂා කරයි
+        // It checks the field names 'questionImage_0' and 'questionImage_1' sent from the frontend.
         const indexParts = file.fieldname.split('_');
         if (indexParts.length === 2) {
           const qIndex = parseInt(indexParts[1], 10);
           if (questions[qIndex]) {
-            // MongoDB එකේ සේව් වන ආකෘතිය: /Quize_images/file_name.png
             questions[qIndex].imageUrl = `/Quize_images/${file.filename}`;
           }
         }
@@ -36,31 +35,31 @@ exports.createQuiz = async (req, res) => {
     });
 
     await newQuiz.save();
-    res.status(201).json({ success: true, message: 'ප්‍රශ්න පත්‍රය සාර්ථකව Admin වෙත යවන ලදී!', quiz: newQuiz });
+    res.status(201).json({ success: true, message: 'The question paper was successfully sent to the Admin!', quiz: newQuiz });
   } catch (error) {
     console.error('Error creating quiz:', error);
-    res.status(500).json({ success: false, error: 'සර්වර් දෝෂයක් සිදුව ඇත.' });
+    res.status(500).json({ success: false, error: 'A server error has occurred.' });
   }
 };
 
 exports.getPendingQuizzes = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     const quizzes = await Quiz.find({})
       .populate('teacherId', 'name email teacherId profilePhoto')
       .sort({ createdAt: -1 });
     res.status(200).json(quizzes);
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දත්ත ලබාගැනීමේ දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'Data retrieval error.' });
   }
 };
 
 exports.updateQuizStatus = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     const { id } = req.params;
     const { status, rejectReason } = req.body;
@@ -69,7 +68,7 @@ exports.updateQuizStatus = async (req, res) => {
       { status, rejectReason: status === 'rejected' ? (rejectReason || "No reason provided") : "" },
       { new: true }
     ).populate('teacherId', 'name email teacherId profilePhoto');
-    res.status(200).json({ success: true, message: `ප්‍රශ්න පත්‍රය ${status} කරන ලදී.`, quiz: updatedQuiz });
+    res.status(200).json({ success: true, message: `Question Paper ${status} It was done.`, quiz: updatedQuiz });
   } catch (error) {
     res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
@@ -78,34 +77,34 @@ exports.updateQuizStatus = async (req, res) => {
 exports.deleteQuizAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     await Quiz.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: 'Quiz එක මකා දමන ලදී.' });
+    res.status(200).json({ success: true, message: 'The quiz was deleted.' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'An error.' });
   }
 };
 
 exports.getMyQuizzes = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     const quizzes = await Quiz.find({ teacherId: req.user.id }).sort({ createdAt: -1 });
     res.status(200).json(quizzes);
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දත්ත ලබාගැනීමේ දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'Data retrieval error.' });
   }
 };
 
 exports.publishQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     
-    // Materials වල මෙන්ම පන්ති වලට publish කිරීමට classIds ලබා ගැනීම
+    // Obtaining class IDs to publish to classes, just as with materials.
     const { classIds } = req.body; 
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
@@ -119,30 +118,28 @@ exports.publishQuiz = async (req, res) => {
     }
 
     await quiz.save();
-    res.status(200).json({ success: true, message: 'Quiz එක Publish කරන ලදී!', quiz });
+    res.status(200).json({ success: true, message: 'The quiz has been published!', quiz });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'An error.' });
   }
 };
 
 exports.deleteTeacherQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     await Quiz.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: 'Quiz එක මකා දමන ලදී.' });
+    res.status(200).json({ success: true, message: 'The quiz was deleted.' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'දෝෂයක්.' });
   }
 };
 
-// පන්තියකට අදාළ Quizzes ලබා දීම (Export කර නිවැරදි කළා)
+// Providing quizzes for a class (exported and corrected)
 exports.getQuizzesByClass = async (req, res) => {
   try {
     const classId = req.params.classId;
-    
-    // Quizs වෙනුවට Quiz භාවිතා කර ඇත. අනුමත (approved) වූ ඒවා පමණක් යවයි
     const quizzes = await Quiz.find({ 
       classIds: classId,
       isPublished: true,
@@ -151,12 +148,12 @@ exports.getQuizzesByClass = async (req, res) => {
 
     res.json(quizzes);
   } catch (err) {
-    console.error("Quizzes ලබා ගැනීමේ දෝෂයක්:", err);
+    console.error("An error occurred while retrieving quizzes:", err);
     res.status(500).send('Server Error');
   }
 };
 
-// ID එක මඟින් නිශ්චිත Quiz එකක් ලබා ගැනීම
+// Retrieving a specific quiz using the ID
 exports.getQuizById = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
@@ -171,11 +168,11 @@ exports.getQuizById = async (req, res) => {
 };
 
 
-// සිසුවෙකු විසින් Quiz එකක් Submit කිරීම
+// A student submitting a quiz
 exports.submitQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
 
     const quizId = req.params.id;
@@ -184,11 +181,11 @@ exports.submitQuiz = async (req, res) => {
 
     const existingSub = await QuizSubmission.findOne({ quizId, studentId });
     if (existingSub) {
-      return res.status(400).json({ success: false, message: 'ඔබ දැනටමත් මෙම Quiz එක සම්පූර්ණ කර ඇත. එය කළ හැක්කේ එක් වරක් පමණි.' });
+      return res.status(400).json({ success: false, message: 'You have already completed this quiz. It can only be taken once.' });
     }
 
     const quiz = await Quiz.findById(quizId);
-    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
+    if (!quiz) return res.status(404).json({ success: false, message: 'The quiz cannot be found.' });
 
     let mcqScore = 0;
     let maxScore = 0;
@@ -210,7 +207,7 @@ exports.submitQuiz = async (req, res) => {
     const newSub = new QuizSubmission({
       quizId,
       studentId,
-      answers, // plain object ලෙස save වේ
+      answers,
       score: mcqScore,
       maxScore,
       isEvaluated: !hasEssay,
@@ -218,14 +215,14 @@ exports.submitQuiz = async (req, res) => {
     });
 
     await newSub.save();
-    res.status(200).json({ success: true, message: 'සාර්ථකව ඉදිරිපත් කරන ලදී!', score: mcqScore, maxScore });
+    res.status(200).json({ success: true, message: 'Successfully presented!', score: mcqScore, maxScore });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
 
-// ගුරුවරයාට අදාළ Quiz එකේ සියලුම Student Submissions ලබා ගැනීම
+// Retrieving all student submissions for the quiz assigned to the teacher.
 exports.getQuizSubmissions = async (req, res) => {
   try {
     const quizId = req.params.id;
@@ -238,7 +235,7 @@ exports.getQuizSubmissions = async (req, res) => {
   }
 };
 
-// ගුරුවරයා විසින් Paper එක චෙක් කිරීම සහ Essay ලකුණු Calculate කර Save කිරීම
+// The teacher checks the paper, calculates the essay marks, and saves them.
 exports.evaluateEssay = async (req, res) => {
   try {
     const { submissionId, essayMarks } = req.body; 
@@ -258,8 +255,8 @@ exports.evaluateEssay = async (req, res) => {
         const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
         const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-        // නම්‍යශීලී ලෙස සංසන්දනය කිරීම (උදා: 'b. ram' හෝ 'ram' යන දෙකම නිවැරදි ලෙස ගැනීම සඳහා)
-        // මෙහිදී අකුර පමණක් හෝ වචනය පමණක් උපුටාගෙන පරීක්ෂා කරයි
+        // Flexible comparison (e.g., to treat both 'b. ram' and 'ram' as correct)
+        // In this instance, only the letter or the word is extracted and examined.
         const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
         const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
 
@@ -285,7 +282,7 @@ exports.evaluateEssay = async (req, res) => {
   }
 };
 
-// සිසුවෙක් දැනටමත් මෙම Quiz එක කර ඇද්දැයි පරීක්ෂා කිරීම
+// Checking whether a student has already attempted this quiz
 exports.checkQuizSubmission = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -297,12 +294,45 @@ exports.checkQuizSubmission = async (req, res) => {
 
     const submission = await QuizSubmission.findOne({ quizId, studentId });
     if (submission) {
-      return res.status(200).json({ submitted: true, message: 'ඔබ දැනටමත් මෙම Quiz එක සම්පූර්ණ කර ඇත.' });
+      return res.status(200).json({ submitted: true, message: 'You have already completed this quiz.' });
     }
 
     res.status(200).json({ submitted: false });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+// 1. Retrieving the number of new quizzes for the sidebar
+exports.getNewQuizCount = async (req, res) => {
+  try {
+    const count = await Quiz.countDocuments({ isNewForSidebar: true });
+    res.json({ count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 2. Removing the number when the sidebar is clicked
+exports.clearQuizSidebarBadge = async (req, res) => {
+  try {
+    await Quiz.updateMany({ isNewForSidebar: true }, { isNewForSidebar: false });
+    res.json({ message: 'Sidebar badge cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 3. Removing the dot from the card/table.
+exports.clearQuizCardDot = async (req, res) => {
+  try {
+    await Quiz.findByIdAndUpdate(req.params.id, { isNewForTable: false });
+    res.json({ message: 'Quiz card dot cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
   }
 };
