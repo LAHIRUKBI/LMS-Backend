@@ -1,0 +1,126 @@
+const path = require('path');
+const fs = require('fs');
+const Ad = require('../models/Ad');
+
+// අලුතින් Ad එකක් සෑදීම
+exports.createAd = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const { headline, description, status } = req.body;
+    
+    let parsedLinks = [];
+    if (req.body.links) {
+      parsedLinks = JSON.parse(req.body.links);
+    }
+
+    let imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      imageUrls = req.files.map(file => `/Ad_images/${file.filename}`);
+    }
+
+    const newAd = new Ad({
+      headline,
+      description,
+      images: imageUrls,
+      links: parsedLinks,
+      status: status || 'active',
+      createdBy: req.user.id
+    });
+
+    await newAd.save();
+    res.status(201).json({ success: true, message: 'Ad එක සාර්ථකව නිර්මාණය කරන ලදී!', ad: newAd });
+  } catch (error) {
+    console.error("Ad creation error:", error);
+    res.status(500).json({ success: false, error: 'සර්වර් දෝෂයක් සිදුව ඇත.' });
+  }
+};
+
+// Student Home Page එකට පෙන්වීම සඳහා Active Ads ලබා ගැනීම
+exports.getActiveAds = async (req, res) => {
+  try {
+    const ads = await Ad.find({ status: 'active' }).sort({ createdAt: -1 });
+    res.status(200).json(ads);
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'දත්ත ලබාගැනීමේ දෝෂයක්.' });
+  }
+};
+
+// 1. Admin සඳහා සියලුම Ads ලබා ගැනීම
+exports.getAllAdsAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+    const ads = await Ad.find().sort({ createdAt: -1 });
+    res.status(200).json(ads);
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'දත්ත ලබාගැනීමේ දෝෂයක්.' });
+  }
+};
+
+// 2. Ad එකක් Delete කිරීම (Error 500 විසඳා ඇත)
+exports.deleteAdAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const ad = await Ad.findById(req.params.id);
+    if (!ad) {
+      return res.status(404).json({ success: false, message: 'Ad එක සොයාගත නොහැක.' });
+    }
+
+    // පින්තූර ආරක්ෂිතව මකා දැමීම
+    if (ad.images && Array.isArray(ad.images)) {
+      ad.images.forEach(imgUrl => {
+        if (typeof imgUrl === 'string' && imgUrl.trim() !== '') {
+          // '/' ලකුණින් පටන් ගන්නවා නම් එය ඉවත් කර path.join එකට ලබාදීම (Crash වීම වැළැක්වීමට)
+          const cleanImgUrl = imgUrl.startsWith('/') ? imgUrl.substring(1) : imgUrl;
+          const filePath = path.join(__dirname, '..', cleanImgUrl);
+          
+          if (fs.existsSync(filePath)) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch (unlinkErr) {
+              console.error("File Delete Error:", unlinkErr);
+            }
+          }
+        }
+      });
+    }
+
+    await Ad.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'දැන්වීම සාර්ථකව මකා දමන ලදී.' });
+  } catch (error) {
+    console.error("Delete Ad Error:", error); 
+    res.status(500).json({ success: false, error: 'මකාදැමීමේ දෝෂයක්.' });
+  }
+};
+
+// 3. Ad එකක විස්තර Edit කිරීම
+exports.updateAdAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    }
+
+    const { headline, description, status, links } = req.body;
+
+    const updatedAd = await Ad.findByIdAndUpdate(
+      req.params.id,
+      { headline, description, status, links },
+      { new: true }
+    );
+
+    if (!updatedAd) {
+      return res.status(404).json({ success: false, message: 'Ad එක සොයාගත නොහැක.' });
+    }
+
+    res.status(200).json({ success: true, message: 'දැන්වීම සාර්ථකව යාවත්කාලීන කරන ලදී.', ad: updatedAd });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'යාවත්කාලීන කිරීමේ දෝෂයක්.' });
+  }
+};
