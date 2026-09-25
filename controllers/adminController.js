@@ -188,6 +188,41 @@ const getAllStudents = async (req, res) => {
   }
 };
 
+// --- New Student Tracking Functions ---
+
+// 1. Retrieving the count of new children for the sidebar
+const getNewStudentCount = async (req, res) => {
+  try {
+    const count = await Student.countDocuments({ isNewForSidebar: true });
+    res.json({ count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 2. Removing the number when the sidebar is clicked (setting `isNewForSidebar` to `false`)
+const clearSidebarBadge = async (req, res) => {
+  try {
+    await Student.updateMany({ isNewForSidebar: true }, { isNewForSidebar: false });
+    res.json({ message: 'Sidebar badge cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 3. Removing the child's dot from the table (setting `isNewForTable` to `false`)
+const clearStudentRowDot = async (req, res) => {
+  try {
+    await Student.findByIdAndUpdate(req.params.id, { isNewForTable: false });
+    res.json({ message: 'Student row dot cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
 // අදාල Functions සියල්ල Export කිරීම
 module.exports = {
   addTeacher,
@@ -195,5 +230,8 @@ module.exports = {
   getAllAdmins,
   deleteAdmin,
   deleteTeacher,
-  getAllStudents
+  getAllStudents,
+  getNewStudentCount,
+  clearSidebarBadge,
+  clearStudentRowDot
 };

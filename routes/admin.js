@@ -3,7 +3,7 @@ const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 
 // Controller ගොනුවෙන් functions ඉම්පෝර්ට් කරගැනීම
-const {addTeacher,getAllTeachers,getAllAdmins,deleteAdmin,deleteTeacher,getAllStudents} = require('../controllers/adminController');
+const {addTeacher,getAllTeachers,getAllAdmins,deleteAdmin,deleteTeacher,getAllStudents,getNewStudentCount, clearSidebarBadge, clearStudentRowDot} = require('../controllers/adminController');
 
 // Routes නිර්මාණය කිරීම
 router.post('/add-teacher', authMiddleware, addTeacher);
@@ -12,5 +12,8 @@ router.get('/admins', authMiddleware, getAllAdmins);
 router.delete('/admins/:id', authMiddleware, deleteAdmin);
 router.delete('/teachers/:id', authMiddleware, deleteTeacher);
 router.get('/students', getAllStudents);
+router.get('/students/new-count', authMiddleware, getNewStudentCount);
+router.put('/students/clear-sidebar', authMiddleware, clearSidebarBadge);
+router.put('/students/:id/clear-dot', authMiddleware, clearStudentRowDot);
 
 module.exports = router;
