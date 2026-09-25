@@ -242,6 +242,41 @@ const getStudentMaterials = async (req, res) => {
   }
 };
 
+// --- New Material Tracking Functions ---
+
+// 1. Obtaining the quantity of new materials for the sidebar
+const getNewMaterialCount = async (req, res) => {
+  try {
+    const count = await Material.countDocuments({ isNewForSidebar: true });
+    res.json({ count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 2. Removing the number when the sidebar is clicked 
+const clearMaterialSidebarBadge = async (req, res) => {
+  try {
+    await Material.updateMany({ isNewForSidebar: true }, { isNewForSidebar: false });
+    res.json({ message: 'Sidebar badge cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 3. Removing the dot from the card
+const clearMaterialCardDot = async (req, res) => {
+  try {
+    await Material.findByIdAndUpdate(req.params.id, { isNewForTable: false });
+    res.json({ message: 'Material card dot cleared' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
 module.exports = {
   uploadMaterial,
   getMyMaterials,
@@ -251,5 +286,8 @@ module.exports = {
   updateMaterialStatus,
   deleteMaterialAdmin,
   getMaterialsByClass,
-  getStudentMaterials
+  getStudentMaterials,
+  getNewMaterialCount,
+  clearMaterialSidebarBadge,
+  clearMaterialCardDot
 };

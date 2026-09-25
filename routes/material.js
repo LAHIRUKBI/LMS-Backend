@@ -4,12 +4,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('../middleware/authMiddleware');
-
-// Controller ගොනුවෙන් functions ඉම්පෝර්ට් කරගැනීම
 const {uploadMaterial,getMyMaterials,deleteMyMaterial,publishMaterial,getAllMaterialsAdmin,updateMaterialStatus,deleteMaterialAdmin, getMaterialsByClass,
-  getStudentMaterials} = require('../controllers/materialController');
+  getStudentMaterials, getNewMaterialCount, clearMaterialSidebarBadge, clearMaterialCardDot} = require('../controllers/materialController');
 
-// 'uploads' folder එක නැත්නම් එය ස්වයංක්‍රීයව සෑදීම
+// Automatically creating the 'uploads' folder if it does not exist.
 const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
@@ -36,15 +34,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 500 * 1024 * 1024 } // 5MB සීමාව (Cover image සඳහා)
+  limits: { fileSize: 500 * 1024 * 1024 } // 5MB limit (for cover image)
 });
 
-// Routes නිර්මාණය කිරීම
+// Creating routes
 router.post('/upload', authMiddleware, upload.fields([{ name: 'file', maxCount: 1 }, { name: 'coverImage', maxCount: 1 }]), uploadMaterial)
 router.get('/my-materials', authMiddleware, getMyMaterials);
 router.get('/admin/all', authMiddleware, getAllMaterialsAdmin);
 
-// Parameter සහිත routes පහළින් තැබීම වඩාත් සුදුසුයි
+// It is best to place routes with parameters at the bottom.
 router.get('/student/all', authMiddleware, getStudentMaterials);
 router.get('/class/:classId', authMiddleware, getMaterialsByClass);
 router.put('/:id/publish', authMiddleware, publishMaterial);
@@ -52,18 +50,23 @@ router.put('/admin/:id/status', authMiddleware, updateMaterialStatus);
 router.delete('/admin/:id', authMiddleware, deleteMaterialAdmin);
 router.delete('/:id', authMiddleware, deleteMyMaterial);
 
+// --- Material Tracking Routes ---
+router.get('/admin/new-count', authMiddleware, getNewMaterialCount);
+router.put('/admin/clear-sidebar', authMiddleware, clearMaterialSidebarBadge);
+router.put('/admin/:id/clear-dot', authMiddleware, clearMaterialCardDot);
+
 // ================= Student API =================
 
-// සිසුන්ට අනුමත වූ (Approved) සියලුම පාඩම් ලබා දීම
+// Providing students with all approved lessons.
 router.get('/student/all', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'student') {
       return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
     }
     
-    // status එක 'approved' වන ඒවා පමණක් ලබාගැනීම
+    // Retrieving only those with the status 'approved'
     const materials = await Material.find({ status: 'approved' })
-      .populate('teacherId', 'name subject') // ගුරුවරයාගේ නම ලබා ගැනීම
+      .populate('teacherId', 'name subject') // Retrieving the teacher's name
       .sort({ createdAt: -1 });
       
     res.json(materials);
