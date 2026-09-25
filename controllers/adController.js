@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 const Ad = require('../models/Ad');
 
-// අලුතින් Ad එකක් සෑදීම
 exports.createAd = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -18,7 +17,8 @@ exports.createAd = async (req, res) => {
 
     let imageUrls = [];
     if (req.files && req.files.length > 0) {
-      imageUrls = req.files.map(file => `/Ad_images/${file.filename}`);
+      // 👇 මෙහි /advertisement/ ලෙස වෙනස් කර ඇත
+      imageUrls = req.files.map(file => `/advertisement/${file.filename}`);
     }
 
     const newAd = new Ad({
@@ -38,7 +38,6 @@ exports.createAd = async (req, res) => {
   }
 };
 
-// Student Home Page එකට පෙන්වීම සඳහා Active Ads ලබා ගැනීම
 exports.getActiveAds = async (req, res) => {
   try {
     const ads = await Ad.find({ status: 'active' }).sort({ createdAt: -1 });
@@ -48,7 +47,6 @@ exports.getActiveAds = async (req, res) => {
   }
 };
 
-// 1. Admin සඳහා සියලුම Ads ලබා ගැනීම
 exports.getAllAdsAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -61,7 +59,6 @@ exports.getAllAdsAdmin = async (req, res) => {
   }
 };
 
-// 2. Ad එකක් Delete කිරීම (Error 500 විසඳා ඇත)
 exports.deleteAdAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -73,11 +70,9 @@ exports.deleteAdAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ad එක සොයාගත නොහැක.' });
     }
 
-    // පින්තූර ආරක්ෂිතව මකා දැමීම
     if (ad.images && Array.isArray(ad.images)) {
       ad.images.forEach(imgUrl => {
         if (typeof imgUrl === 'string' && imgUrl.trim() !== '') {
-          // '/' ලකුණින් පටන් ගන්නවා නම් එය ඉවත් කර path.join එකට ලබාදීම (Crash වීම වැළැක්වීමට)
           const cleanImgUrl = imgUrl.startsWith('/') ? imgUrl.substring(1) : imgUrl;
           const filePath = path.join(__dirname, '..', cleanImgUrl);
           
@@ -100,7 +95,6 @@ exports.deleteAdAdmin = async (req, res) => {
   }
 };
 
-// 3. Ad එකක විස්තර Edit කිරීම
 exports.updateAdAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
