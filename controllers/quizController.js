@@ -5,7 +5,7 @@ const QuizSubmission = require('../models/QuizSubmission');
 exports.createQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
 
     const { title, description, duration } = req.body;
@@ -286,7 +286,7 @@ exports.evaluateEssay = async (req, res) => {
 exports.checkQuizSubmission = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ success: false, message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
 
     const quizId = req.params.id;

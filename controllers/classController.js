@@ -5,7 +5,7 @@ const ClassRequest = require('../models/ClassRequest');
 exports.createClass = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const { grade, medium, mode, day, startTime, endTime } = req.body;
@@ -32,7 +32,7 @@ exports.createClass = async (req, res) => {
 exports.getTeacherClasses = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const classes = await Class.find({ teacherId: req.user.id }).sort({ createdAt: -1 });
@@ -47,7 +47,7 @@ exports.getTeacherClasses = async (req, res) => {
 exports.deleteClass = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const classId = req.params.id;
@@ -83,7 +83,7 @@ exports.getAllClassesForAdmin = async (req, res) => {
 exports.requestClass = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const { classId, teacherId } = req.body;

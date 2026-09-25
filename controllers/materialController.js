@@ -6,7 +6,7 @@ const Material = require('../models/Material');
 const uploadMaterial = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය. ගුරුවරුන්ට පමණක් Files Upload කළ හැක.' });
+      return res.status(403).json({ message: 'Permission denied. ගුරුවරුන්ට පමණක් Files Upload කළ හැක.' });
     }
 
     const { title, type, subject, grade, description } = req.body;
@@ -57,7 +57,7 @@ const uploadMaterial = async (req, res) => {
 const getMyMaterials = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const materials = await Material.find({ teacherId: req.user.id }).sort({ createdAt: -1 });
@@ -72,7 +72,7 @@ const getMyMaterials = async (req, res) => {
 const deleteMyMaterial = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const material = await Material.findById(req.params.id);
@@ -81,7 +81,7 @@ const deleteMyMaterial = async (req, res) => {
     }
 
     if (material.teacherId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය. ඔබට ඉවත් කළ හැක්කේ ඔබගේ පාඩම් පමණි.' });
+      return res.status(403).json({ message: 'Permission denied. ඔබට ඉවත් කළ හැක්කේ ඔබගේ පාඩම් පමණි.' });
     }
 
     const filePath = path.join(__dirname, '..', material.fileUrl);
@@ -159,7 +159,7 @@ const getAllMaterialsAdmin = async (req, res) => {
 const updateMaterialStatus = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
 
     const { status, rejectReason } = req.body;
@@ -183,7 +183,7 @@ const updateMaterialStatus = async (req, res) => {
 const deleteMaterialAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය. Admin වරුන්ට පමණි.' });
+      return res.status(403).json({ message: 'Permission denied. Admin වරුන්ට පමණි.' });
     }
 
     const material = await Material.findById(req.params.id);
@@ -227,7 +227,7 @@ const getMaterialsByClass = async (req, res) => {
 const getStudentMaterials = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
     
     // status එක 'approved' වන ඒවා පමණක් ලබාගැනීම
