@@ -18,6 +18,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const quizRoutes = require('./routes/quiz');
 const classRoutes = require('./routes/classRoutes');
 const adRoutes = require('./routes/adRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const studentAuthRoutes = require('./routes/studentAuth');
 
@@ -36,6 +37,7 @@ app.use('/profile_photos', express.static(path.join(__dirname, 'profile_photos')
 app.use('/PDF_covers', express.static(path.join(__dirname, 'PDF_covers')));
 app.use('/Quize_images', express.static(path.join(__dirname, 'Quize_images')));
 app.use('/advertisement', express.static(path.join(__dirname, 'advertisement')));
+app.use('/swp', express.static(path.join(__dirname, 'swp')));
 
 // LMS System API Routes
 app.use('/api/auth', authRoutes);
@@ -47,7 +49,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/ads', adRoutes);
-
+app.use('/api/dashboard', dashboardRoutes);
 
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
