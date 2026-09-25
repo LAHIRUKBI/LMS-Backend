@@ -61,7 +61,7 @@ router.put('/admin/:id/clear-dot', authMiddleware, clearMaterialCardDot);
 router.get('/student/all', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+      return res.status(403).json({ message: 'Permission denied.' });
     }
     
     // Retrieving only those with the status 'approved'

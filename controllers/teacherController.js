@@ -6,7 +6,7 @@ const fs = require('fs');
 // 1. ගුරුවරයාගේ Profile විස්තර ලබාගැනීම
 const getTeacherProfile = async (req, res) => {
   try {
-    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Permission denied.' });
     
     // Password එක හැර අනිත් සියලු විස්තර යැවීම
     const teacher = await Teacher.findById(req.user.id).select('-password');
@@ -20,7 +20,7 @@ const getTeacherProfile = async (req, res) => {
 // 2. Profile විස්තර යාවත්කාලීන කිරීම (Update)
 const updateTeacherProfile = async (req, res) => {
   try {
-    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය.' });
+    if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Permission denied.' });
 
     const { teacherId, name, email, subject, phone, address, website, password } = req.body;
 

@@ -8,9 +8,14 @@ const linkSchema = new mongoose.Schema({
 const adSchema = new mongoose.Schema({
   headline: { type: String, required: true },
   description: { type: String, required: true },
-  images: [{ type: String }], // පින්තූර කිහිපයක URLs ගබඩා කිරීමට
-  links: [linkSchema],        // ලින්ක් කිහිපයක් ගබඩා කිරීමට
+  mediaType: { type: String, enum: ['image', 'video', 'both'], default: 'image' },
+  images: [{ type: String }],
+  video: { type: String, default: null },
+  links: [linkSchema],
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  publishStartDate: { type: Date, default: Date.now }, 
+  publishEndDate: { type: Date, default: null }, 
+  targetAudience: { type: String, default: 'all' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true }
 }, { timestamps: true });
 

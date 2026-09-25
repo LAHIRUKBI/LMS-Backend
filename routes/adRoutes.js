@@ -6,7 +6,6 @@ const fs = require('fs');
 const authMiddleware = require('../middleware/authMiddleware');
 const { createAd, getActiveAds, getAllAdsAdmin, deleteAdAdmin, updateAdAdmin } = require('../controllers/adController');
 
-// 👇 අලුත් advertisement ෆෝල්ඩරය සෑදීම
 const adImgDir = path.join(__dirname, '../advertisement');
 if (!fs.existsSync(adImgDir)) {
   fs.mkdirSync(adImgDir);
@@ -22,15 +21,17 @@ const storage = multer.diskStorage({
   }
 });
 
+// The limit has been set to 50MB due to the video size.
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }
+  limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
-router.post('/create', authMiddleware, upload.array('images', 5), createAd);
+
+router.post('/create', authMiddleware, upload.fields([{ name: 'images', maxCount: 5 },{ name: 'video', maxCount: 1 }]), createAd);
 router.get('/active', getActiveAds);
 router.get('/admin/all', authMiddleware, getAllAdsAdmin);
-router.put('/admin/:id', authMiddleware, updateAdAdmin);
+router.put('/admin/:id', authMiddleware, upload.fields([{ name: 'images', maxCount: 5 },{ name: 'video', maxCount: 1 }]), updateAdAdmin);
 router.delete('/admin/:id', authMiddleware, deleteAdAdmin);
 
 module.exports = router;
