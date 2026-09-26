@@ -35,7 +35,9 @@ router.get("/settings", async (req, res) => {
 
 router.put("/settings", upload.fields([
   { name: 'heroImagesFiles', maxCount: 10 },
-  { name: 'galleryImagesFiles', maxCount: 10 }
+  { name: 'galleryImagesFiles', maxCount: 10 },
+  { name: 'testimonialFiles', maxCount: 20 },
+  { name: 'badgeAvatarFiles', maxCount: 4 }
 ]), async (req, res) => {
   try {
     let dataToUpdate = JSON.parse(req.body.settingsData || "{}");
@@ -54,6 +56,25 @@ router.put("/settings", upload.fields([
         const fileUrl = `/swp/${file.filename}`;
         if (dataToUpdate.galleryItems && dataToUpdate.galleryItems[index]) {
           dataToUpdate.galleryItems[index].image = fileUrl;
+        }
+      });
+    }
+
+    if (req.files && req.files['testimonialFiles']) {
+      req.files['testimonialFiles'].forEach((file, index) => {
+        const fileUrl = `/swp/${file.filename}`;
+        if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
+          dataToUpdate.testimonials[index].image = fileUrl;
+        }
+      });
+    }
+
+    // Badge Avatars Images Handle කිරීම
+    if (req.files && req.files['badgeAvatarFiles']) {
+      req.files['badgeAvatarFiles'].forEach((file, index) => {
+        const fileUrl = `/swp/${file.filename}`;
+        if (dataToUpdate.badgeAvatars && dataToUpdate.badgeAvatars[index]) {
+          dataToUpdate.badgeAvatars[index].image = fileUrl;
         }
       });
     }
