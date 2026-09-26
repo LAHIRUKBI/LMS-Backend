@@ -104,22 +104,25 @@ exports.publishQuiz = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     
-    // Obtaining class IDs to publish to classes, just as with materials.
-    const { classIds } = req.body; 
+    // frontend එකෙන් එන classIds සහ classSchedules ලබා ගැනීම
+    const { classIds, classSchedules } = req.body; 
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
 
     if (classIds && Array.isArray(classIds) && classIds.length > 0) {
       quiz.classIds = classIds;
+      quiz.classSchedules = classSchedules || [];
       quiz.isPublished = true;
     } else {
       quiz.classIds = [];
+      quiz.classSchedules = [];
       quiz.isPublished = false;
     }
 
     await quiz.save();
     res.status(200).json({ success: true, message: 'The quiz has been published!', quiz });
   } catch (error) {
+    console.error('Publish error:', error);
     res.status(500).json({ success: false, error: 'An error.' });
   }
 };
@@ -140,13 +143,48 @@ exports.deleteTeacherQuiz = async (req, res) => {
 exports.getQuizzesByClass = async (req, res) => {
   try {
     const classId = req.params.classId;
-    const quizzes = await Quiz.find({ 
+    const now = new Date(); // වර්තමාන දිනය සහ වේලාව
+
+    // අදාළ පන්තියට publish කර ඇති සියලුම approved quizzes ලබා ගැනීම
+    const allQuizzes = await Quiz.find({ 
       classIds: classId,
       isPublished: true,
       status: 'approved' 
     }).sort({ createdAt: -1 });
 
-    res.json(quizzes);
+    // Schedule වෙලාවන්ට අනුව අදාළ කාල සීමාව තුළ පවතින quizzes පමණක් ෆිල්ටර් කර ගැනීම
+    const validQuizzes = allQuizzes.filter(quiz => {
+      // මෙම පන්තිය සඳහා අදාළ schedule විස්තරය සොයා ගැනීම
+      const schedule = quiz.classSchedules?.find(
+        sch => (sch.classId?._id?.toString() || sch.classId?.toString()) === classId.toString()
+      );
+
+      // schedule එකක් හමු නොවුණහොත් හෝ publishType එක 'now' නම් සාමාන්‍ය පරිදි පෙන්වන්න
+      if (!schedule || schedule.publishType === 'now') {
+        return true;
+      }
+
+      // 'schedule' කර ඇත්නම් වෙලාවන් පරීක්ෂා කිරීම
+      if (schedule.publishType === 'schedule') {
+        const startDateTime = schedule.startDate && schedule.startTime 
+          ? new Date(`${schedule.startDate.toISOString().split('T')[0]}T${schedule.startTime}`)
+          : (schedule.startDate ? new Date(schedule.startDate) : null);
+
+        const endDateTime = schedule.endDate && schedule.endTime 
+          ? new Date(`${schedule.endDate.toISOString().split('T')[0]}T${schedule.endTime}`)
+          : (schedule.endDate ? new Date(schedule.endDate) : null);
+
+        // ආරම්භක වේලාවට පසු වී තිබේද සහ අවසන් වේලාවට පෙර වී තිබේද යන්න පරීක්ෂා කිරීම
+        const isAfterStart = startDateTime ? now >= startDateTime : true;
+        const isBeforeEnd = endDateTime ? now <= endDateTime : true;
+
+        return isAfterStart && isBeforeEnd;
+      }
+
+      return true;
+    });
+
+    res.json(validQuizzes);
   } catch (err) {
     console.error("An error occurred while retrieving quizzes:", err);
     res.status(500).send('Server Error');
