@@ -33,48 +33,39 @@ router.get("/settings", async (req, res) => {
   }
 });
 
-router.put("/settings", upload.fields([
-  { name: 'heroImagesFiles', maxCount: 10 },
-  { name: 'galleryImagesFiles', maxCount: 10 },
-  { name: 'testimonialFiles', maxCount: 20 },
-  { name: 'badgeAvatarFiles', maxCount: 4 }
-]), async (req, res) => {
+router.put("/settings", upload.any(), async (req, res) => {
   try {
     let dataToUpdate = JSON.parse(req.body.settingsData || "{}");
 
-    if (req.files && req.files['heroImagesFiles']) {
-      req.files['heroImagesFiles'].forEach((file, index) => {
-        const fileUrl = `/swp/${file.filename}`;
-        if (dataToUpdate.heroImages && dataToUpdate.heroImages[index]) {
-          dataToUpdate.heroImages[index].image = fileUrl;
-        }
-      });
-    }
+    if (req.files && req.files.length > 0) {
+      // Keep track of file indices for arrays
+      let heroFileIndex = 0;
+      let galleryFileIndex = 0;
+      let badgeAvatarFileIndex = 0;
 
-    if (req.files && req.files['galleryImagesFiles']) {
-      req.files['galleryImagesFiles'].forEach((file, index) => {
+      req.files.forEach((file) => {
         const fileUrl = `/swp/${file.filename}`;
-        if (dataToUpdate.galleryItems && dataToUpdate.galleryItems[index]) {
-          dataToUpdate.galleryItems[index].image = fileUrl;
-        }
-      });
-    }
-
-    if (req.files && req.files['testimonialFiles']) {
-      req.files['testimonialFiles'].forEach((file, index) => {
-        const fileUrl = `/swp/${file.filename}`;
-        if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
-          dataToUpdate.testimonials[index].image = fileUrl;
-        }
-      });
-    }
-
-    // Badge Avatars Images Handle කිරීම
-    if (req.files && req.files['badgeAvatarFiles']) {
-      req.files['badgeAvatarFiles'].forEach((file, index) => {
-        const fileUrl = `/swp/${file.filename}`;
-        if (dataToUpdate.badgeAvatars && dataToUpdate.badgeAvatars[index]) {
-          dataToUpdate.badgeAvatars[index].image = fileUrl;
+        
+        if (file.fieldname === 'heroImagesFiles') {
+          if (dataToUpdate.heroImages && dataToUpdate.heroImages[heroFileIndex]) {
+            dataToUpdate.heroImages[heroFileIndex].image = fileUrl;
+          }
+          heroFileIndex++;
+        } else if (file.fieldname === 'galleryImagesFiles') {
+          if (dataToUpdate.galleryItems && dataToUpdate.galleryItems[galleryFileIndex]) {
+            dataToUpdate.galleryItems[galleryFileIndex].image = fileUrl;
+          }
+          galleryFileIndex++;
+        } else if (file.fieldname === 'badgeAvatarFiles') {
+          if (dataToUpdate.badgeAvatars && dataToUpdate.badgeAvatars[badgeAvatarFileIndex]) {
+            dataToUpdate.badgeAvatars[badgeAvatarFileIndex].image = fileUrl;
+          }
+          badgeAvatarFileIndex++;
+        } else if (file.fieldname.startsWith('testimonialFile_')) {
+          const index = parseInt(file.fieldname.split('_')[1], 10);
+          if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
+            dataToUpdate.testimonials[index].image = fileUrl;
+          }
         }
       });
     }
