@@ -22,6 +22,11 @@ const DashboardSettingsSchema = new mongoose.Schema({
   galleryItems: [{
     image: String,
     text: String
+  }],
+  // Social Media Links
+  socialLinks: [{
+    platform: { type: String, required: true },
+    url: { type: String, default: "" }
   }]
 }, { timestamps: true });
 

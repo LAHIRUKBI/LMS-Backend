@@ -5,7 +5,6 @@ const path = require("path");
 const fs = require("fs");
 const DashboardSettings = require("../models/DashboardSettings");
 
-// Multer Storage Configuration for /swp folder
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(__dirname, "../swp");
@@ -22,7 +21,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Get Dashboard Settings
 router.get("/settings", async (req, res) => {
   try {
     let settings = await DashboardSettings.findOne();
@@ -35,7 +33,6 @@ router.get("/settings", async (req, res) => {
   }
 });
 
-// Update Dashboard Settings with Image Upload Support
 router.put("/settings", upload.fields([
   { name: 'heroImagesFiles', maxCount: 10 },
   { name: 'galleryImagesFiles', maxCount: 10 }
@@ -43,18 +40,15 @@ router.put("/settings", upload.fields([
   try {
     let dataToUpdate = JSON.parse(req.body.settingsData || "{}");
 
-    // Handle Hero Images Files if uploaded
     if (req.files && req.files['heroImagesFiles']) {
       req.files['heroImagesFiles'].forEach((file, index) => {
         const fileUrl = `/swp/${file.filename}`;
-        // Map file to the corresponding hero image index if specified, or push/update
         if (dataToUpdate.heroImages && dataToUpdate.heroImages[index]) {
           dataToUpdate.heroImages[index].image = fileUrl;
         }
       });
     }
 
-    // Handle Gallery Images Files if uploaded
     if (req.files && req.files['galleryImagesFiles']) {
       req.files['galleryImagesFiles'].forEach((file, index) => {
         const fileUrl = `/swp/${file.filename}`;
