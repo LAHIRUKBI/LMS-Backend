@@ -10,6 +10,7 @@ const quizSubmissionSchema = new mongoose.Schema({
   maxScore: { type: Number, default: 0 },
   essayMarks: { type: Map, of: Number, default: {} }, // questionId -> marks given by teacher
   isEvaluated: { type: Boolean, default: false },
+  isSentToStudent: { type: Boolean, default: false },
   submittedAt: { type: Date, default: Date.now },
   timeTaken: { type: String, default: "" } // උදා: "දෙන ලද වෙලාවට වඩා විනාඩි 4 කට කලින්"
 }, { timestamps: true });

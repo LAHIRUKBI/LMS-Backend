@@ -18,7 +18,7 @@ const {
   getQuizSubmissions,
   evaluateEssay,
   checkQuizSubmission,
-  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot,evaluateAllMCQQuizzes
+  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot,evaluateAllMCQQuizzes,deleteQuizSubmission,sendSubmissionToStudent,getStudentQuizResults,sendAllSubmissionsToStudents
 } = require('../controllers/quizController');
 
 // Automatically creating the 'Quize_images' folder if it does not exist.
@@ -61,6 +61,10 @@ router.get('/class/:classId', authMiddleware, getQuizzesByClass);
 router.post('/:id/submit', authMiddleware, submitQuiz);
 router.get('/:id/submissions', authMiddleware, getQuizSubmissions);
 router.post('/evaluate-essay', authMiddleware, evaluateEssay);
+router.delete('/submission/:id', authMiddleware, deleteQuizSubmission);
+router.put('/submission/:id/send', authMiddleware, sendSubmissionToStudent);
+router.get('/student/my-results', authMiddleware, getStudentQuizResults);
+router.put('/:quizId/send-all', authMiddleware, sendAllSubmissionsToStudents);
 
 // Quiz Tracking Routes
 router.get('/admin/new-count', authMiddleware, getNewQuizCount);

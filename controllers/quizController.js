@@ -410,3 +410,68 @@ exports.evaluateAllMCQQuizzes = async (req, res) => {
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
+
+
+exports.deleteQuizSubmission = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    await QuizSubmission.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'Student submission deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+
+exports.sendSubmissionToStudent = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    const sub = await QuizSubmission.findByIdAndUpdate(
+      req.params.id,
+      { isSentToStudent: true },
+      { new: true }
+    );
+    if (!sub) return res.status(404).json({ success: false, message: 'Submission not found.' });
+    res.status(200).json({ success: true, message: 'Submission sent to student successfully!', sub });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+
+// සිසුවාට අදාළ ලකුණු ලබා දීම සඳහා (Student My Results API)
+exports.getStudentQuizResults = async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    const studentId = req.user.id;
+    const results = await QuizSubmission.find({ studentId, isSentToStudent: true })
+      .populate('quizId', 'title description duration questions')
+      .sort({ updatedAt: -1 });
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Error fetching student results:", error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
+
+
+// සියලුම සිසුන්ට එකවර ප්‍රතිඵල යැවීම සඳහා
+exports.sendAllSubmissionsToStudents = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    const quizId = req.params.quizId;
+    await QuizSubmission.updateMany({ quizId }, { isSentToStudent: true });
+    res.status(200).json({ success: true, message: 'All submissions sent to students successfully!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};
