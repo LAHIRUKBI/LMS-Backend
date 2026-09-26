@@ -362,3 +362,51 @@ exports.clearQuizCardDot = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
+
+
+// controllers/quizController.js (මෙය අලුතින් හෝ අදාළ ස්ථානයට එකතු කරන්න)
+
+exports.evaluateAllMCQQuizzes = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+
+    const quizId = req.params.id;
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
+
+    // සියලුම MCQ ප්‍රශ්න පමණක් දැයි පරීක්ෂා කිරීම (අවශ්‍ය නම්)
+    const submissions = await QuizSubmission.find({ quizId });
+
+    for (let sub of submissions) {
+      let mcqScore = 0;
+      const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
+
+      quiz.questions.forEach((q) => {
+        const qId = q._id.toString();
+        if (q.type === 'mcq' || q.type === 'short') {
+          const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
+          const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
+
+          const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
+          const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
+
+          if (cleanStudent === cleanCorrect) {
+            mcqScore += q.marks || 5;
+          }
+        }
+      });
+
+      sub.score = mcqScore;
+      sub.isEvaluated = true;
+      await sub.save();
+    }
+
+    res.status(200).json({ success: true, message: 'All MCQ student submissions evaluated and saved successfully!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  }
+};

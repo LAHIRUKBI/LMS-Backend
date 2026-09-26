@@ -18,7 +18,7 @@ const {
   getQuizSubmissions,
   evaluateEssay,
   checkQuizSubmission,
-  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot
+  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot,evaluateAllMCQQuizzes
 } = require('../controllers/quizController');
 
 // Automatically creating the 'Quize_images' folder if it does not exist.
@@ -70,5 +70,6 @@ router.put('/admin/:id/clear-dot', authMiddleware, clearQuizCardDot);
 // This must always be placed at the very bottom (to avoid interfering with other routes due to `/:id`).
 router.get('/:id', authMiddleware, getQuizById);
 router.get('/:id/check-submission', authMiddleware, checkQuizSubmission);
+router.post('/:id/evaluate-all-mcq', authMiddleware, evaluateAllMCQQuizzes);
 
 module.exports = router;
