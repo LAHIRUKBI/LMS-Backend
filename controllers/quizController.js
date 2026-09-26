@@ -225,35 +225,24 @@ exports.submitQuiz = async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'The quiz cannot be found.' });
 
-    let mcqScore = 0;
     let maxScore = 0;
-    let hasEssay = false;
-
     quiz.questions.forEach((q) => {
-      const qId = q._id.toString();
       maxScore += q.marks || 5;
-      if (q.type === 'mcq' || q.type === 'short') {
-        const studentAns = answers[qId] || "";
-        if (studentAns.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase()) {
-          mcqScore += q.marks || 5;
-        }
-      } else if (q.type === 'essay') {
-        hasEssay = true;
-      }
     });
 
+    // ගුරුවරයා පරීක්ෂා කරන තුරු score එක 0 ලෙස හෝ evaluated නැතිව තැන්පත් කිරීම
     const newSub = new QuizSubmission({
       quizId,
       studentId,
       answers,
-      score: mcqScore,
+      score: 0,
       maxScore,
-      isEvaluated: !hasEssay,
+      isEvaluated: false,
       timeTaken
     });
 
     await newSub.save();
-    res.status(200).json({ success: true, message: 'Successfully presented!', score: mcqScore, maxScore });
+    res.status(200).json({ success: true, message: 'Quiz submitted successfully! Waiting for teacher evaluation.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, error: 'Server Error' });
@@ -273,7 +262,7 @@ exports.getQuizSubmissions = async (req, res) => {
   }
 };
 
-// The teacher checks the paper, calculates the essay marks, and saves them.
+// The teacher checks the paper, calculates MCQ + essay marks, and sends/saves them to DB upon clicking Send
 exports.evaluateEssay = async (req, res) => {
   try {
     const { submissionId, essayMarks } = req.body; 
@@ -293,8 +282,6 @@ exports.evaluateEssay = async (req, res) => {
         const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
         const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-        // Flexible comparison (e.g., to treat both 'b. ram' and 'ram' as correct)
-        // In this instance, only the letter or the word is extracted and examined.
         const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
         const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
 
@@ -309,11 +296,12 @@ exports.evaluateEssay = async (req, res) => {
       totalEssayMarks = Object.values(essayMarks).reduce((a, b) => Number(a) + Number(b), 0);
     }
 
+    // ගුරුවරයා Send / Save කළ පසු පමණක් ලකුණු දත්ත ගබඩාවේ තැන්පත් වේ
     sub.score = mcqOnlyScore + totalEssayMarks;
     sub.isEvaluated = true;
     await sub.save();
 
-    res.json({ success: true, message: 'ලකුණු සාර්ථකව ගණනය කර සේව් කරන ලදී!', sub });
+    res.json({ success: true, message: 'Marks successfully calculated and sent to database!', sub });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
