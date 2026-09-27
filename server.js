@@ -38,6 +38,7 @@ app.use('/PDF_covers', express.static(path.join(__dirname, 'PDF_covers')));
 app.use('/Quize_images', express.static(path.join(__dirname, 'Quize_images')));
 app.use('/advertisement', express.static(path.join(__dirname, 'advertisement')));
 app.use('/swp', express.static(path.join(__dirname, 'swp')));
+app.use('/Class_Cover_images', express.static(path.join(__dirname, 'Class_Cover_images')));
 
 // LMS System API Routes
 app.use('/api/auth', authRoutes);

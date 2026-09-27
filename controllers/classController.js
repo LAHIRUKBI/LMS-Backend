@@ -8,7 +8,12 @@ exports.createClass = async (req, res) => {
       return res.status(403).json({ message: 'Permission denied.' });
     }
 
-    const { grade, medium, mode, day, startTime, endTime } = req.body;
+    const { grade, medium, mode, day, startTime, endTime, description } = req.body;
+    
+    let coverImage = "";
+    if (req.file) {
+      coverImage = `/Class_Cover_images/${req.file.filename}`;
+    }
 
     const newClass = new Class({
       teacherId: req.user.id,
@@ -17,7 +22,9 @@ exports.createClass = async (req, res) => {
       mode,
       day,
       startTime,
-      endTime
+      endTime,
+      coverImage,
+      description: description || ""
     });
 
     await newClass.save();
@@ -159,6 +166,34 @@ exports.deleteClassRequest = async (req, res) => {
     }
     
     res.json({ message: 'The student was successfully removed from the class.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+
+// 10. Admin updating class details (Cover image & Description)
+exports.adminUpdateClass = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    const classId = req.params.id;
+    const { description } = req.body;
+    
+    let updateData = { description };
+    if (req.file) {
+      updateData.coverImage = `/Class_Cover_images/${req.file.filename}`;
+    }
+
+    const updatedClass = await Class.findByIdAndUpdate(classId, updateData, { new: true });
+    if (!updatedClass) {
+      return res.status(404).json({ message: 'Class not found.' });
+    }
+
+    res.json({ message: 'Class details successfully updated by admin!', classData: updatedClass });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
