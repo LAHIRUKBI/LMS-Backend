@@ -54,7 +54,7 @@ app.use('/api/dashboard', dashboardRoutes);
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
 app.use('/Student_profile_photos', express.static(path.join(__dirname, 'Student_profile_photos')));
-// MongoDB Connection එක කැඳවීම
+// Invoking the MongoDB connection
 connectDB();
 
 // Basic Test Route
