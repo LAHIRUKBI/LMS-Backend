@@ -1,7 +1,7 @@
 const Class = require('../models/Class');
 const ClassRequest = require('../models/ClassRequest');
 
-// 1. නව පන්තියක් නිර්මාණය කිරීම (Create Class)
+// 1. Creating a New Class (Create Class)
 exports.createClass = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -21,14 +21,14 @@ exports.createClass = async (req, res) => {
     });
 
     await newClass.save();
-    res.status(201).json({ message: 'පන්තිය සාර්ථකව නිර්මාණය කරන ලදී!', classData: newClass });
+    res.status(201).json({ message: 'The class was successfully created!', classData: newClass });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
   }
 };
 
-// 2. අදාළ ගුරුවරයාට අයත් පන්ති ලැයිස්තුව ලබාගැනීම (Get Classes)
+// 2. Retrieving the list of classes assigned to the relevant teacher (Get Classes)
 exports.getTeacherClasses = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -43,7 +43,7 @@ exports.getTeacherClasses = async (req, res) => {
   }
 };
 
-// 3. පන්තියක් ඉවත් කිරීම (Delete Class)
+// 3. Deleting a Class (Delete Class)
 exports.deleteClass = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -54,10 +54,10 @@ exports.deleteClass = async (req, res) => {
     const deletedClass = await Class.findOneAndDelete({ _id: classId, teacherId: req.user.id });
 
     if (!deletedClass) {
-      return res.status(404).json({ message: 'පන්තිය සොයාගැනීමට නොහැක හෝ ඔබට එය ඉවත් කිරීමට අවසර නැත.' });
+      return res.status(404).json({ message: 'The class cannot be found, or you do not have permission to remove it.' });
     }
 
-    res.json({ message: 'පන්තිය සාර්ථකව ඉවත් කරන ලදී.' });
+    res.json({ message: 'The class was successfully removed.' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -65,10 +65,10 @@ exports.deleteClass = async (req, res) => {
 };
 
 
-// 4. ඇඩ්මින් සඳහා සියලුම පන්ති දත්ත ලබාගැනීම (Admin Get All Classes)
+// 4. Retrieve all class data for the admin (Admin Get All Classes)
 exports.getAllClassesForAdmin = async (req, res) => {
   try {
-    // Teacher දත්ත සමග Class දත්ත ලබා ගැනීම (populate)
+    // Populating class data with teacher data
     const classes = await Class.find()
       .populate('teacherId', 'name profilePhoto subject teacherId')
       .sort({ createdAt: -1 });
@@ -79,7 +79,7 @@ exports.getAllClassesForAdmin = async (req, res) => {
   }
 };
 
-// 5. සිසුවෙකු විසින් පන්තියක් සඳහා ඉල්ලුම් කිරීම (Request Class)
+// 5. A student requesting a class (Request Class)
 exports.requestClass = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -89,10 +89,10 @@ exports.requestClass = async (req, res) => {
     const { classId, teacherId } = req.body;
     const studentId = req.user.id;
 
-    // දැනටමත් ඉල්ලීමක් කර ඇද්දැයි පරීක්ෂා කිරීම
+    // Checking whether a request has already been made
     const existing = await ClassRequest.findOne({ studentId, classId });
     if (existing) {
-      return res.status(400).json({ message: 'ඔබ දැනටමත් මෙම පන්තිය සඳහා ඉල්ලීමක් කර ඇත.' });
+      return res.status(400).json({ message: 'You have already made a request for this class.' });
     }
 
     const newRequest = new ClassRequest({
@@ -103,14 +103,14 @@ exports.requestClass = async (req, res) => {
     });
 
     await newRequest.save();
-    res.status(201).json({ message: 'පන්ති ඉල්ලීම සාර්ථකව යවන ලදී!' });
+    res.status(201).json({ message: 'The class request was successfully sent!' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
   }
 };
 
-// 6. සිසුවාගේ සියලුම ඉල්ලීම්වල තත්ත්වය ලබාගැනීම
+// 6. Obtaining the status of all the student's requests
 exports.getStudentRequests = async (req, res) => {
   try {
     const requests = await ClassRequest.find({ studentId: req.user.id });
@@ -121,7 +121,7 @@ exports.getStudentRequests = async (req, res) => {
   }
 };
 
-// 7. ඇඩ්මින් සඳහා සියලුම පන්ති ඉල්ලීම් ලබාගැනීම
+// 7. Receiving all class requests for the admin
 exports.getAllClassRequests = async (req, res) => {
   try {
     const requests = await ClassRequest.find()
@@ -135,13 +135,30 @@ exports.getAllClassRequests = async (req, res) => {
   }
 };
 
-// 8. ඇඩ්මින් විසින් ඉල්ලීම Approve හෝ Block කිරීම
+// 8. Admin approving or blocking the request
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { requestId, status } = req.body; // status: 'Approved' හෝ 'Blocked'
     const updated = await ClassRequest.findByIdAndUpdate(requestId, { status }, { new: true });
-    if (!updated) return res.status(404).json({ message: 'ඉල්ලීම සොයාගත නොහැක.' });
-    res.json({ message: `ඉල්ලීමේ තත්ත්වය ${status} ලෙස වෙනස් කරන ලදී.`, updated });
+    if (!updated) return res.status(404).json({ message: 'The request cannot be found.' });
+    res.json({ message: `Request status ${status} was changed to`, updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 9. Complete removal of the student's class request by the admin (Delete Student Request)
+exports.deleteClassRequest = async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const deleted = await ClassRequest.findByIdAndDelete(requestId);
+    
+    if (!deleted) {
+      return res.status(404).json({ message: 'The request cannot be found.' });
+    }
+    
+    res.json({ message: 'The student was successfully removed from the class.' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');

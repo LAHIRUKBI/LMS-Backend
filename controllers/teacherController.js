@@ -3,12 +3,12 @@ const Teacher = require('../models/Teacher');
 const path = require('path');
 const fs = require('fs');
 
-// 1. ගුරුවරයාගේ Profile විස්තර ලබාගැනීම
+// 1. Obtaining the teacher's profile details
 const getTeacherProfile = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Permission denied.' });
     
-    // Password එක හැර අනිත් සියලු විස්තර යැවීම
+    // Sending all details except the password.
     const teacher = await Teacher.findById(req.user.id).select('-password');
     res.json(teacher);
   } catch (err) {
@@ -17,7 +17,7 @@ const getTeacherProfile = async (req, res) => {
   }
 };
 
-// 2. Profile විස්තර යාවත්කාලීන කිරීම (Update)
+// 2. Updating Profile Details
 const updateTeacherProfile = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Permission denied.' });
@@ -29,7 +29,7 @@ const updateTeacherProfile = async (req, res) => {
       parsedQualifications = JSON.parse(req.body.qualifications);
     }
 
-    // Social Links parse කරගැනීම
+    // Parsing social links
     let parsedSocialLinks = [];
     if (req.body.socialLinks) {
       parsedSocialLinks = JSON.parse(req.body.socialLinks);
@@ -38,7 +38,7 @@ const updateTeacherProfile = async (req, res) => {
     if (teacherId) {
       const existing = await Teacher.findOne({ teacherId, _id: { $ne: req.user.id } });
       if (existing) {
-        return res.status(400).json({ message: 'මෙම Teacher ID එක දැනටමත් වෙනත් අයෙකු භාවිත කරයි!' });
+        return res.status(400).json({ message: 'This Teacher ID is already being used by someone else!' });
       }
     }
 

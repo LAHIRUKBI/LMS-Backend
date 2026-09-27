@@ -5,7 +5,7 @@ const adminSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  isDefault: { type: Boolean, default: false } // Default admin ද යන්න හඳුනාගැනීමට
+  isDefault: { type: Boolean, default: false } // To identify whether it is the default admin
 }, { timestamps: true });
 
 module.exports = mongoose.model('Admin', adminSchema);

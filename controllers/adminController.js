@@ -4,7 +4,7 @@ const Teacher = require('../models/Teacher');
 const Admin = require('../models/Admin');
 const Student = require('../models/Student');
 
-// 1. Add Teacher API (Admin ට පමණක් අවසර ඇත)
+// 1. Add Teacher API (Access restricted to Admin only)
 const addTeacher = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -13,24 +13,24 @@ const addTeacher = async (req, res) => {
 
     const { teacherId, name, email, subject, password } = req.body;
 
-    // Teacher ID එක පරීක්ෂා කිරීම
+    // Checking the Teacher ID
     let existingTeacher = await Teacher.findOne({ teacherId });
     if (existingTeacher) {
       return res.status(400).json({ message: 'This Teacher ID is already in use!' });
     }
 
-    // Email එකක් දී ඇත්නම්, එය වෙනත් අයෙකු සතුදැයි පරීක්ෂා කිරීම
+    // Checking if a provided email address belongs to someone else.
     if (email && email.trim() !== "") {
       let existingEmail = await Teacher.findOne({ email });
       if (existingEmail) {
-        return res.status(400).json({ message: 'මෙම Email ලිපිනය දැනටමත් වෙනත් ගුරුවරයෙකු සතුය!' });
+        return res.status(400).json({ message: 'This email address already belongs to another teacher!' });
       }
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // අලුත් ගුරුවරයා සෑදීම (ඊමේල් නැත්නම් එය field එකෙන් ඉවත් වේ)
+    // Creating a new teacher (if there is no email, it is removed from the field)
     const newTeacherData = {
       teacherId,
       name,
@@ -47,7 +47,7 @@ const addTeacher = async (req, res) => {
 
     let emailStatusMessage = '';
 
-    // ඊමේල් එකක් දී ඇත්නම් පමණක් යැවීම
+    // Send only if an email address has been provided.
     if (email && email.trim() !== "") {
       const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -111,7 +111,7 @@ const getAllTeachers = async (req, res) => {
 const getAllAdmins = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය!' });
+      return res.status(403).json({ message: 'Permission denied!' });
     }
 
     const admins = await Admin.find().select('-password').sort({ createdAt: 1 });
@@ -126,26 +126,26 @@ const getAllAdmins = async (req, res) => {
 const deleteAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය!' });
+      return res.status(403).json({ message: 'Permission denied!' });
     }
 
     const adminIdToDelete = req.params.id;
     const adminToDelete = await Admin.findById(adminIdToDelete);
 
     if (!adminToDelete) {
-      return res.status(404).json({ message: 'මෙම Admin ගිණුම සොයාගත නොහැක.' });
+      return res.status(404).json({ message: 'This admin account cannot be found.' });
     }
 
     if (adminToDelete.isDefault) {
-      return res.status(400).json({ message: 'ප්‍රධාන (Super Admin) ගිණුම ඉවත් කළ නොහැක!' });
+      return res.status(400).json({ message: 'The main (Super Admin) account cannot be removed!' });
     }
 
     if (adminToDelete._id.toString() === req.user.id) {
-      return res.status(400).json({ message: 'ඔබට ඔබගේම ගිණුම ඉවත් කළ නොහැක!' });
+      return res.status(400).json({ message: 'You cannot delete your own account!' });
     }
 
     await Admin.findByIdAndDelete(adminIdToDelete);
-    res.json({ message: 'Admin ගිණුම සාර්ථකව ඉවත් කරන ලදී.' });
+    res.json({ message: 'The admin account was successfully removed.' });
 
   } catch (err) {
     console.error(err.message);
@@ -157,18 +157,18 @@ const deleteAdmin = async (req, res) => {
 const deleteTeacher = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'අවසර ප්‍රතික්ෂේප විය!' });
+      return res.status(403).json({ message: 'Permission denied!' });
     }
 
     const teacherIdToDelete = req.params.id;
     const teacherToDelete = await Teacher.findById(teacherIdToDelete);
     
     if (!teacherToDelete) {
-      return res.status(404).json({ message: 'මෙම ගුරුවරයාගේ ගිණුම සොයාගත නොහැක.' });
+      return res.status(404).json({ message: 'This teachers account cannot be found..' });
     }
 
     await Teacher.findByIdAndDelete(teacherIdToDelete);
-    res.json({ message: 'ගුරු ගිණුම සාර්ථකව ඉවත් කරන ලදී.' });
+    res.json({ message: 'The teacher account was successfully removed.' });
 
   } catch (err) {
     console.error(err.message);
@@ -176,10 +176,10 @@ const deleteTeacher = async (req, res) => {
   }
 };
 
-//6. සියලුම සිසුන්ගේ දත්ත ලබාගැනීමේ Controller Function එක
+//6. The controller function for retrieving data for all students.
 const getAllStudents = async (req, res) => {
   try {
-    // අලුත්ම සිසුන් මුලින් එන සේ (createdAt: -1) සහ password එක අයින් කර දත්ත ලබා ගැනීම
+    // Retrieving data with the newest students appearing first (createdAt: -1) and excluding the password.
     const students = await Student.find().sort({ createdAt: -1 }).select('-password');
     res.json(students);
   } catch (err) {
@@ -223,7 +223,7 @@ const clearStudentRowDot = async (req, res) => {
   }
 };
 
-// අදාල Functions සියල්ල Export කිරීම
+
 module.exports = {
   addTeacher,
   getAllTeachers,
