@@ -1,21 +1,40 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/authMiddleware'); // ගුරුවරයාගේ Token එක පරීක්ෂා කරන Middleware එක
+const authMiddleware = require('../middleware/authMiddleware'); // Middleware that checks the teacher's token
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
-const { createClass, getTeacherClasses, deleteClass, getAllClassesForAdmin, requestClass, getStudentRequests, getAllClassRequests, updateRequestStatus , deleteClassRequest } = require('../controllers/classController');
+const { createClass, getTeacherClasses, deleteClass, getAllClassesForAdmin, requestClass, getStudentRequests, getAllClassRequests, updateRequestStatus , deleteClassRequest, adminUpdateClass } = require('../controllers/classController');
 
-router.post('/create', authMiddleware, createClass);
+// Configure multer storage for Class_Cover_images
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../Class_Cover_images');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
+
+router.post('/create', authMiddleware, upload.single('coverImage'), createClass);
 router.get('/my-classes', authMiddleware, getTeacherClasses);
 router.delete('/:id', authMiddleware, deleteClass);
 
-// Admin සහ Student සඳහා සියලුම පන්ති ලබාගැනීමේ route එක
+// The route to access all classes for Admins and Students.
 router.get('/all', authMiddleware, getAllClassesForAdmin);
 
 router.post('/request', authMiddleware, requestClass);
 router.get('/student-requests', authMiddleware, getStudentRequests);
 router.get('/requests/all', authMiddleware, getAllClassRequests);
 router.put('/requests/status', authMiddleware, updateRequestStatus);
-// සිසුන්ගේ පන්ති ඉල්ලීම සම්පූර්ණයෙන්ම ඉවත් කිරීමට (Delete) අලුතින් එකතු කළ Route එක
+// The newly added route to completely remove (delete) students' class requests.
 router.delete('/requests/:id', authMiddleware, deleteClassRequest);
+router.put('/admin/update/:id', authMiddleware, upload.single('coverImage'), adminUpdateClass);
 
 module.exports = router;

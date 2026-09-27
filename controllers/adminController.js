@@ -188,6 +188,45 @@ const getAllStudents = async (req, res) => {
   }
 };
 
+// 7. Delete Single Student API
+const deleteStudent = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Permission denied!' });
+    }
+
+    const studentIdToDelete = req.params.id;
+    const studentToDelete = await Student.findById(studentIdToDelete);
+
+    if (!studentToDelete) {
+      return res.status(404).json({ message: 'Student account not found.' });
+    }
+
+    await Student.findByIdAndDelete(studentIdToDelete);
+    res.json({ message: 'Student account was successfully removed.' });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 8. Delete All Students API
+const deleteAllStudents = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Permission denied!' });
+    }
+
+    await Student.deleteMany({});
+    res.json({ message: 'All student accounts were successfully removed.' });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
 // --- New Student Tracking Functions ---
 
 // 1. Retrieving the count of new children for the sidebar
@@ -233,5 +272,7 @@ module.exports = {
   getAllStudents,
   getNewStudentCount,
   clearSidebarBadge,
-  clearStudentRowDot
+  clearStudentRowDot,
+  deleteStudent,
+  deleteAllStudents
 };
