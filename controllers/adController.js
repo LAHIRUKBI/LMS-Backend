@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const Ad = require('../models/Ad');
+const Notification = require('../models/Notification');
+const Student = require('../models/Student');
 
 exports.createAd = async (req, res) => {
   try {
@@ -18,7 +20,6 @@ exports.createAd = async (req, res) => {
     let imageUrls = [];
     let videoUrl = null;
 
-    // Distinguishing between images and videos
     if (req.files) {
       if (req.files['images']) {
         imageUrls = req.files['images'].map(file => `/advertisement/${file.filename}`);
@@ -27,6 +28,10 @@ exports.createAd = async (req, res) => {
         videoUrl = `/advertisement/${req.files['video'][0].filename}`;
       }
     }
+
+    const startDate = publishStartDate ? new Date(publishStartDate) : new Date();
+    const endDate = publishEndDate ? new Date(publishEndDate) : null;
+    const now = new Date();
 
     const newAd = new Ad({
       headline,
@@ -37,13 +42,39 @@ exports.createAd = async (req, res) => {
       links: parsedLinks,
       status: status || 'active',
       targetAudience: targetAudience || 'all',
-      publishStartDate: publishStartDate ? new Date(publishStartDate) : Date.now(),
-      publishEndDate: publishEndDate ? new Date(publishEndDate) : null,
+      publishStartDate: startDate,
+      publishEndDate: endDate,
       createdBy: req.user.id
     });
 
     await newAd.save();
-    res.status(201).json({ success: true, message: 'Ad successfully created!', ad: newAd });
+
+    // Ad එක Active නම් සහ දැන්ම publish වී නම් සිසුන්ට Notifications යැවීම
+    if ((status || 'active') === 'active' && startDate <= now) {
+      try {
+        let query = {};
+        if (targetAudience && targetAudience !== 'all') {
+          query.grade = targetAudience;
+        }
+
+        const students = await Student.find(query);
+
+        const notificationPromises = students.map(student => {
+          return Notification.create({
+            userId: student._id,
+            recipientRole: 'student',
+            title: `📢 New Announcement: ${headline}`,
+            message: description.length > 80 ? description.substring(0, 80) + '...' : description
+          });
+        });
+
+        await Promise.all(notificationPromises);
+      } catch (notifErr) {
+        console.error("Error sending ad notifications to students:", notifErr);
+      }
+    }
+
+    res.status(201).json({ success: true, message: 'Ad successfully created and students notified!', ad: newAd });
   } catch (error) {
     console.error("Ad creation error:", error);
     res.status(500).json({ success: false, error: 'Server error occurred.' });
