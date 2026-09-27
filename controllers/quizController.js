@@ -1,5 +1,6 @@
 const Quiz = require('../models/Quizs');
 const QuizSubmission = require('../models/QuizSubmission');
+const Notification = require('../models/Notification');
 
 // The teacher prepares a quiz (with images) and sends it to the admin.
 exports.createQuiz = async (req, res) => {
@@ -430,14 +431,23 @@ exports.sendSubmissionToStudent = async (req, res) => {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
-    const sub = await QuizSubmission.findByIdAndUpdate(
-      req.params.id,
-      { isSentToStudent: true },
-      { new: true }
-    );
+    const sub = await QuizSubmission.findById(req.params.id).populate('quizId');
     if (!sub) return res.status(404).json({ success: false, message: 'Submission not found.' });
+
+    sub.isSentToStudent = true;
+    await sub.save();
+
+    // සිසුවාට Notification එකක් යැවීම
+    await Notification.create({
+      userId: sub.studentId,
+      recipientRole: 'student',
+      title: '📝 Quiz Results Published!',
+      message: `Your teacher has evaluated and published your results for the quiz: "${sub.quizId?.title || 'Quiz'}". Score: ${sub.score}/${sub.maxScore}`
+    });
+
     res.status(200).json({ success: true, message: 'Submission sent to student successfully!', sub });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
@@ -468,8 +478,31 @@ exports.sendAllSubmissionsToStudents = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     const quizId = req.params.quizId;
+    
+    // අදාළ quiz එකට අදාළ submissions සියල්ල ලබා ගැනීම
+    const submissions = await QuizSubmission.find({ quizId }).populate('quizId');
+    if (submissions.length === 0) {
+      return res.status(404).json({ success: false, message: 'No submissions found for this quiz.' });
+    }
+
+    const quizTitle = submissions[0].quizId?.title || 'Quiz';
+
+    // සියල්ල update කිරීම
     await QuizSubmission.updateMany({ quizId }, { isSentToStudent: true });
-    res.status(200).json({ success: true, message: 'All submissions sent to students successfully!' });
+
+    // සෑම සිසුවෙකුටම වෙන වෙනම Notification නිර්මාණය කිරීම
+    const notificationPromises = submissions.map(sub => {
+      return Notification.create({
+        userId: sub.studentId,
+        recipientRole: 'student',
+        title: '📝 Quiz Results Published!',
+        message: `Your teacher has evaluated and published your results for the quiz: "${quizTitle}". Score: ${sub.score}/${sub.maxScore}`
+      });
+    });
+
+    await Promise.all(notificationPromises);
+
+    res.status(200).json({ success: true, message: 'All submissions sent to students and notifications created successfully!' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: 'Server Error' });

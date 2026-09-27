@@ -146,8 +146,22 @@ exports.getAllClassRequests = async (req, res) => {
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { requestId, status } = req.body; // status: 'Approved' හෝ 'Blocked'
-    const updated = await ClassRequest.findByIdAndUpdate(requestId, { status }, { new: true });
+    const updated = await ClassRequest.findByIdAndUpdate(requestId, { status }, { new: true })
+      .populate('classId');
+
     if (!updated) return res.status(404).json({ message: 'The request cannot be found.' });
+
+    // සිසුවාට Notification එකක් යැවීම
+    const Notification = require('../models/Notification');
+    await Notification.create({
+      userId: updated.studentId,
+      recipientRole: 'student',
+      title: status === 'Approved' ? 'Class Request Approved! 🎉' : 'Class Request Blocked',
+      message: status === 'Approved' 
+        ? `Your request to join the class has been approved by the admin.` 
+        : `Your request to join the class has been blocked by the admin.`
+    });
+
     res.json({ message: `Request status ${status} was changed to`, updated });
   } catch (err) {
     console.error(err);
