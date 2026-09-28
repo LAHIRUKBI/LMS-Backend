@@ -1,7 +1,7 @@
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
 
-// 1. ගුරුවරයෙකු අලුත් Ticket එකක් සෑදීම
+// 1. ගුරුවරයෙකු අලුත් Ticket එකක් සෑදූ විට Admin ට Notification එකක් යැවීම
 const createTicket = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Only teachers can create tickets.' });
@@ -14,6 +14,22 @@ const createTicket = async (req, res) => {
     });
     
     await newTicket.save();
+
+    // Admin සඳහා Notification එකක් සෑදීම සහ ticketId එක ඇතුළත් කිරීම
+    const newNotif = new Notification({
+      recipientRole: 'admin',
+      ticketId: newTicket._id,
+      title: "New Support Ticket",
+      message: `Teacher opened a new ticket: "${newTicket.title}"`
+    });
+    await newNotif.save();
+
+    // Socket.io හරහා Real-time යැවීම
+    const io = req.app.get("io");
+    if (io) {
+      io.to("admin_room").emit("receive_admin_notification", newNotif);
+    }
+
     res.status(201).json({ message: 'Ticket created successfully!', ticket: newTicket });
   } catch (err) {
     console.error(err);
