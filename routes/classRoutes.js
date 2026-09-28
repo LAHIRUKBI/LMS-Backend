@@ -27,7 +27,7 @@ router.get('/my-classes', authMiddleware, getTeacherClasses);
 router.delete('/:id', authMiddleware, deleteClass);
 
 // The route to access all classes for Admins and Students.
-router.get('/all', authMiddleware, getAllClassesForAdmin);
+router.get('/all', getAllClassesForAdmin);
 
 router.post('/request', authMiddleware, requestClass);
 router.get('/student-requests', authMiddleware, getStudentRequests);

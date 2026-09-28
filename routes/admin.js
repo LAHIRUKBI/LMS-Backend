@@ -6,7 +6,7 @@ const {addTeacher,getAllTeachers,getAllAdmins,deleteAdmin,deleteTeacher,getAllSt
   deleteStudent, deleteAllStudents} = require('../controllers/adminController');
 
 router.post('/add-teacher', authMiddleware, addTeacher);
-router.get('/teachers', authMiddleware, getAllTeachers);
+router.get('/teachers', getAllTeachers);
 router.get('/admins', authMiddleware, getAllAdmins);
 router.delete('/admins/:id', authMiddleware, deleteAdmin);
 router.delete('/teachers/:id', authMiddleware, deleteTeacher);
