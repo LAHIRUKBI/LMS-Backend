@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Student = require('../models/Student'); // Model එක පවතින තැන අනුව path එක වෙනස් කරගන්න
+const Student = require('../models/Student');
 
 // 1. Student Registration (Email & Password)
 exports.registerStudent = async (req, res) => {
@@ -9,7 +9,7 @@ exports.registerStudent = async (req, res) => {
 
     let student = await Student.findOne({ email });
     if (student) {
-      return res.status(400).json({ message: 'මෙම Email ලිපිනය දැනටමත් භාවිතයේ පවතී.' });
+      return res.status(400).json({ message: 'This email address is already in use.' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -23,11 +23,11 @@ exports.registerStudent = async (req, res) => {
 
     await student.save();
     
-    // කෙලින්ම ලොග් කරවීමට Token එකක් යැවීම
+    // Sending a token for direct login
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.status(201).json({ token, user: student, message: 'ලියාපදිංචිය සාර්ථකයි!' });
+    res.status(201).json({ token, user: student, message: 'Registration successful!' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -41,22 +41,22 @@ exports.loginStudent = async (req, res) => {
 
     let student = await Student.findOne({ email });
     if (!student) {
-      return res.status(400).json({ message: 'වැරදි Email ලිපිනයක් හෝ මුරපදයක්.' });
+      return res.status(400).json({ message: 'Incorrect email address or password.' });
     }
 
     if (student.authProvider === 'google' && !student.password) {
-      return res.status(400).json({ message: 'කරුණාකර Google හරහා ලොග් වන්න.' });
+      return res.status(400).json({ message: 'Please log in via Google.' });
     }
 
     const isMatch = await bcrypt.compare(password, student.password);
     if (!isMatch) {
-      return res.status(400).json({ message: 'වැරදි Email ලිපිනයක් හෝ මුරපදයක්.' });
+      return res.status(400).json({ message: 'Incorrect email address or password.' });
     }
 
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({ token, user: student, message: 'Login සාර්ථකයි!' });
+    res.json({ token, user: student, message: 'Login successful!' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -68,12 +68,12 @@ exports.googleAuthStudent = async (req, res) => {
   try {
     const { name, email, googleId } = req.body;
 
-    // සිසුවා දැනටමත් පද්ධතියේ සිටීදැයි බැලීම
+    // Checking if the student is already in the system
     let student = await Student.findOne({ email });
 
     if (!student) {
-      // පළමු වතාවට Google හරහා එන සිසුවෙක් නම් අලුතින් ගිණුමක් සෑදීම
-      // Phone number එක පසුව Profile එකෙන් Update කරගැනීමට ඉඩ හැරිය හැක
+      // Creating a new account if you are a student arriving via Google for the first time.
+      // The option to update the phone number via the profile later can be provided.
       student = new Student({
         name,
         email,
@@ -85,7 +85,7 @@ exports.googleAuthStudent = async (req, res) => {
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({ token, user: student, message: 'Google Login සාර්ථකයි!' });
+    res.json({ token, user: student, message: 'Google login successful!' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -97,7 +97,7 @@ exports.googleAuthStudent = async (req, res) => {
 exports.updateStudentProfile = async (req, res) => {
   try {
     const userId = req.user.id; 
-    // නව ක්ෂේත්‍ර ද Destructure කර ලබා ගැනීම
+
     const { 
       name, 
       phone, 
@@ -111,7 +111,7 @@ exports.updateStudentProfile = async (req, res) => {
       parentPhone 
     } = req.body;
 
-    // යාවත්කාලීන කළ යුතු දත්ත ලැයිස්තුව
+    // List of data to be updated
     let updateData = { 
       name, 
       phone, 
