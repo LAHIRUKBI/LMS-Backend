@@ -112,11 +112,18 @@ exports.updateStudentProfile = async (req, res) => {
       country, 
       timeZone, 
       medium, 
-      parentName, 
-      parentPhone 
+      fatherName,
+      fatherOccupation,
+      fatherPhone,
+      motherName,
+      motherOccupation,
+      motherPhone,
+      hasGuardian,
+      guardianName,
+      guardianRelation,
+      guardianPhone
     } = req.body;
 
-    // List of data to be updated
     let updateData = { 
       name, 
       phone, 
@@ -126,8 +133,16 @@ exports.updateStudentProfile = async (req, res) => {
       country, 
       timeZone, 
       medium, 
-      parentName, 
-      parentPhone 
+      fatherName,
+      fatherOccupation,
+      fatherPhone,
+      motherName,
+      motherOccupation,
+      motherPhone,
+      hasGuardian: hasGuardian === 'true' || hasGuardian === true,
+      guardianName,
+      guardianRelation,
+      guardianPhone
     };
 
     if (req.file) {
