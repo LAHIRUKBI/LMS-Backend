@@ -128,14 +128,36 @@ exports.getStudentRequests = async (req, res) => {
   }
 };
 
-// 7. Receiving all class requests for the admin
+// 7. Receiving all class requests for the admin (Strictly verifying if this specific class was requested via Free Card)
 exports.getAllClassRequests = async (req, res) => {
   try {
+    const FreeCardRequest = require('../models/freeCardRequests');
+
     const requests = await ClassRequest.find()
-      .populate('studentId', 'name email profileImage grade school')
+      .populate('studentId', 'name email profileImage grade school phone address')
       .populate('classId')
       .populate('teacherId', 'name subject');
-    res.json(requests);
+
+    const enrichedRequests = await Promise.all(requests.map(async (reqItem) => {
+      let isFreeCard = false;
+      if (reqItem.studentId && reqItem.classId) {
+        // Check: Has this student officially submitted a Free Card application (FreeCardRequest) for this specific class (classId)?
+        const freeCardReq = await FreeCardRequest.findOne({ 
+          studentId: reqItem.studentId._id, 
+          selectedClasses: { $in: [reqItem.classId._id] } 
+        });
+        
+        if (freeCardReq) {
+          isFreeCard = true;
+        }
+      }
+      return {
+        ...reqItem.toObject(),
+        isFreeCard
+      };
+    }));
+
+    res.json(enrichedRequests);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');

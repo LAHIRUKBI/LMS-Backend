@@ -22,6 +22,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const noticeRoutes = require('./routes/noticeRoutes');
 
 const studentAuthRoutes = require('./routes/studentAuth');
+const freeCardRoutes = require('./routes/freeCardRoutes');
 
 require('dotenv').config();
 
@@ -40,6 +41,7 @@ app.use('/Quize_images', express.static(path.join(__dirname, 'Quize_images')));
 app.use('/advertisement', express.static(path.join(__dirname, 'advertisement')));
 app.use('/swp', express.static(path.join(__dirname, 'swp')));
 app.use('/Class_Cover_images', express.static(path.join(__dirname, 'Class_Cover_images')));
+app.use('/free_card_request', express.static(path.join(__dirname, 'free_card_request')));
 
 // LMS System API Routes
 app.use('/api/auth', authRoutes);
@@ -57,6 +59,9 @@ app.use('/api/admin', noticeRoutes);
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
 app.use('/Student_profile_photos', express.static(path.join(__dirname, 'Student_profile_photos')));
+app.use('/api/free-card', freeCardRoutes);
+
+
 // Invoking the MongoDB connection
 connectDB();
 
