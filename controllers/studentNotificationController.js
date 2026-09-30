@@ -1,7 +1,7 @@
 // controllers/studentNotificationController.js
 const Notification = require('../models/Notification');
 
-// 1. සිසුවාගේ Notifications ලබා ගැනීම
+// 1. Receiving the student's notifications
 const getStudentNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.user.id, recipientRole: 'student' }).sort({ createdAt: -1 });
@@ -11,7 +11,7 @@ const getStudentNotifications = async (req, res) => {
   }
 };
 
-// 2. Student Notifications කියෙව්වා (Read) ලෙස සලකුණු කිරීම
+// 2. Marking student notifications as read
 const markStudentNotificationsRead = async (req, res) => {
   try {
     await Notification.updateMany({ userId: req.user.id, recipientRole: 'student', isRead: false }, { isRead: true });
@@ -21,7 +21,7 @@ const markStudentNotificationsRead = async (req, res) => {
   }
 };
 
-// 3. Student ගේ තනි Notification එකක් මකා දැමීම
+// 3. Deleting a single student notification
 const deleteStudentNotification = async (req, res) => {
   try {
     await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
@@ -31,7 +31,7 @@ const deleteStudentNotification = async (req, res) => {
   }
 };
 
-// 4. Student ගේ සියලුම Notifications මකා දැමීම (Clear All)
+// 4. Deleting all student notifications (Clear All)
 const clearAllStudentNotifications = async (req, res) => {
   try {
     await Notification.deleteMany({ userId: req.user.id, recipientRole: 'student' });

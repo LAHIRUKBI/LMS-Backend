@@ -3,7 +3,9 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const http = require('http');
-
+const cron = require('node-cron');
+const Notification = require('./models/Notification');
+const NotificationSettings = require('./models/NotificationSettings');
 // Importing config files
 const connectDB = require('./config/db');
 const setupSocket = require('./config/socket');
@@ -60,6 +62,24 @@ app.use('/api/admin', noticeRoutes);
 app.use('/api/auth', studentAuthRoutes);
 app.use('/Student_profile_photos', express.static(path.join(__dirname, 'Student_profile_photos')));
 app.use('/api/free-card', freeCardRoutes);
+
+// Auto-delete Cron Job (සෑම දිනකම මධ්‍යම රාත්‍රී 12ට ක්‍රියාත්මක වේ)
+cron.schedule('0 0 * * *', async () => {
+  try {
+    const settings = await NotificationSettings.findOne();
+    if (settings && settings.autoDeleteDays > 0) {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - settings.autoDeleteDays);
+
+      const result = await Notification.deleteMany({ createdAt: { $lt: cutoffDate } });
+      if (result.deletedCount > 0) {
+        console.log(`Auto-deleted ${result.deletedCount} old notifications.`);
+      }
+    }
+  } catch (err) {
+    console.error('Error in auto-delete cron job:', err);
+  }
+});
 
 
 // Invoking the MongoDB connection
