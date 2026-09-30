@@ -6,14 +6,24 @@ const studentSchema = new mongoose.Schema({
   phone: { type: String }, 
   address: { type: String },
   grade: { type: String },   
-  school: { type: String },  
+  school: { type: String },   
   profileImage: { type: String, default: "" },
   country: { type: String, default: "" },
   timeZone: { type: String, default: "" },
   medium: { type: String, default: "" },
-  parentName: { type: String, default: "" },
-  parentPhone: { type: String, default: "" },
-  // (New Student Tracking)
+  
+  // Father, Mother, Guardian Fields (Legacy parentName & parentPhone ඉවත් කර ඇත)
+  fatherName: { type: String, default: "" },
+  fatherOccupation: { type: String, default: "" },
+  fatherPhone: { type: String, default: "" },
+  motherName: { type: String, default: "" },
+  motherOccupation: { type: String, default: "" },
+  motherPhone: { type: String, default: "" },
+  hasGuardian: { type: Boolean, default: false },
+  guardianName: { type: String, default: "" },
+  guardianRelation: { type: String, default: "" },
+  guardianPhone: { type: String, default: "" },
+
   isNewForSidebar: { type: Boolean, default: true },
   isNewForTable: { type: Boolean, default: true },
   password: { type: String }, 
