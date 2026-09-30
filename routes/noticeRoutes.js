@@ -9,7 +9,8 @@ const {
   getAllNotices,
   deleteNotice,
   createNotice,
-  getStudentNotices
+  getStudentNotices,
+  getTeacherNotices
 } = require('../controllers/noticeController');
 
 // Image Upload Configuration
@@ -23,22 +24,13 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// 1. Get Students List for Notice Selection
-router.get('/students-list', getStudentsList);
 
-// 2. Get Teachers List for Notice Selection
-router.get('/teachers-list', getTeachersList);
-
-// 3. Get All Published Notices
-router.get('/notices', getAllNotices);
-
-// 4. Delete a Notice by ID
-router.delete('/notices/:id', deleteNotice);
-
-// 5. Create Notice with Image Support & Send Notifications to Target Audience
-router.post('/notices', upload.single('image'), createNotice);
-
-// 6. Get Notices for a Specific Student
-router.get('/student/notices', studentAuthMiddleware, getStudentNotices);
+router.get('/students-list', getStudentsList); // 1. Get Students List for Notice Selection
+router.get('/teachers-list', getTeachersList); // 2. Get Teachers List for Notice Selection
+router.get('/notices', getAllNotices); // 3. Get All Published Notices
+router.delete('/notices/:id', deleteNotice); // 4. Delete a Notice by ID
+router.post('/notices', upload.single('image'), createNotice); // 5. Create Notice with Image Support & Send Notifications to Target Audience
+router.get('/student/notices', studentAuthMiddleware, getStudentNotices); // 6. Get Notices for a Specific Student
+router.get('/teacher/notices/:id', getTeacherNotices);
 
 module.exports = router;

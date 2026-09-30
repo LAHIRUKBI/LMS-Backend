@@ -166,11 +166,38 @@ const getStudentNotices = async (req, res) => {
   }
 };
 
+// 7. The function for accessing notices relevant to teachers.
+const getTeacherNotices = async (req, res) => {
+  try {
+    // Since there is no middleware, let's retrieve the `teacherId` from the URL parameter.
+    const teacherId = req.params.id; 
+    
+    if (!teacherId) {
+      return res.status(400).json({ success: false, message: 'Teacher ID is required' });
+    }
+
+    // Fetch notices matching the teacher from Notice Model
+    const notices = await Notice.find({
+      $or: [
+        { targetType: 'everyone' },
+        { targetType: 'all_teachers' },
+        { targetType: 'individual_teacher', targetTeachers: teacherId }
+      ]
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json(notices);
+  } catch (error) {
+    console.error('Fetch teacher notices error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
 module.exports = {
   getStudentsList,
   getTeachersList,
   getAllNotices,
   deleteNotice,
   createNotice,
-  getStudentNotices
+  getStudentNotices,
+  getTeacherNotices
 };
