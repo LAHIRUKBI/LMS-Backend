@@ -66,14 +66,19 @@ exports.loginStudent = async (req, res) => {
 // 3. Google Authentication Handling
 exports.googleAuthStudent = async (req, res) => {
   try {
-    const { name, email, googleId } = req.body;
+    const { name, email, googleId, isRegister } = req.body;
 
-    // Checking if the student is already in the system
     let student = await Student.findOne({ email });
 
     if (!student) {
-      // Creating a new account if you are a student arriving via Google for the first time.
-      // The option to update the phone number via the profile later can be provided.
+      // If this request originated from the login page and the student does not exist, an error is returned.
+      if (!isRegister) {
+        return res.status(400).json({ 
+          message: 'This Google account is not registered. Please sign up first.' 
+        });
+      }
+
+      // Creating a new account via the Register page
       student = new Student({
         name,
         email,
@@ -85,10 +90,10 @@ exports.googleAuthStudent = async (req, res) => {
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({ token, user: student, message: 'Google login successful!' });
+    res.json({ token, user: student, message: 'Google authentication successful!' });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server Error');
+    res.status(550).send('Server Error');
   }
 };
 
