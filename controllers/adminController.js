@@ -3,6 +3,8 @@ const nodemailer = require('nodemailer');
 const Teacher = require('../models/Teacher');
 const Admin = require('../models/Admin');
 const Student = require('../models/Student');
+const fs = require('fs');
+const path = require('path');
 
 // 1. Add Teacher API (Access restricted to Admin only)
 const addTeacher = async (req, res) => {
@@ -227,6 +229,65 @@ const deleteAllStudents = async (req, res) => {
   }
 };
 
+// 1. Admin ගේ Profile එක ලබා ගැනීම
+const getAdminProfile = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.user.id).select('-password');
+    if (!admin) return res.status(404).json({ message: 'Admin account not found.' });
+    res.json(admin);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+// 2. Admin ගේ Profile එක යාවත්කාලීන කිරීම
+// 2. Admin ගේ Profile එක යාවත්කාලීන කිරීම
+const updateAdminProfile = async (req, res) => {
+  try {
+    const { name, email, phoneNumber } = req.body;
+    let admin = await Admin.findById(req.user.id);
+
+    if (!admin) return res.status(404).json({ message: 'Admin account not found.' });
+
+    // තොරතුරු යාවත්කාලීන කිරීම
+    if (name) admin.name = name;
+    if (email) admin.email = email;
+    if (phoneNumber) admin.phoneNumber = phoneNumber;
+
+    // අලුත් ඡායාරූපයක් Upload කර ඇත්නම්
+    if (req.file) {
+      // කලින් ඡායාරූපයක් තිබේ නම් එය Server එකෙන් මකා දැමීම (Delete old photo)
+      if (admin.profilePhoto) {
+        // admin.profilePhoto හි ඇත්තේ 'profile_photos/admin-123.jpg' වැනි අගයකි.
+        // අපි backend එකේ root folder එකට point කරලා delete කරන්න ඕනේ.
+        const oldPhotoPath = path.join(__dirname, '../', admin.profilePhoto);
+        
+        try {
+            if (fs.existsSync(oldPhotoPath)) {
+                fs.unlinkSync(oldPhotoPath);
+                console.log(`Successfully deleted old photo: ${oldPhotoPath}`);
+            } else {
+                 console.log(`Old photo not found to delete: ${oldPhotoPath}`);
+            }
+        } catch (unlinkErr) {
+             console.error(`Error deleting old photo: ${oldPhotoPath}`, unlinkErr);
+             // පින්තූරය delete කරන්න බැරි උනත් අලුත් එක save කිරීම නතර කරන්න එපා.
+        }
+      }
+      // අලුත් ඡායාරූපයේ path එක save කිරීම
+      admin.profilePhoto = 'profile_photos/' + req.file.filename;
+    }
+
+    await admin.save();
+    res.json({ message: 'Profile updated successfully!', admin });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server Error during profile update' });
+  }
+};
+
 // --- New Student Tracking Functions ---
 
 // 1. Retrieving the count of new children for the sidebar
@@ -274,5 +335,7 @@ module.exports = {
   clearSidebarBadge,
   clearStudentRowDot,
   deleteStudent,
-  deleteAllStudents
+  deleteAllStudents,
+  getAdminProfile,
+  updateAdminProfile
 };
