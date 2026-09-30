@@ -48,6 +48,18 @@ const DashboardSettingsSchema = new mongoose.Schema({
     title: { type: String, default: "" },
     idea: { type: String, default: "" },
     rating: { type: Number, default: 5 }
+  }],
+
+  // Second Section)
+  featureBadge: { type: String, default: "Why Choose Us" },
+  featureTitleLine1: { type: String, default: "Everything you need to" },
+  featureTitleHighlight: { type: String, default: "excel" },
+  featureDescription: { type: String, default: "We provide a comprehensive learning environment designed to help you achieve your goals. Our platform combines expert-led content with cutting-edge technology." },
+  featureItems: [{
+    title: { type: String, default: "" },
+    description: { type: String, default: "" },
+    iconType: { type: String, default: "image" }, // 'icon' or 'image'
+    iconImage: { type: String, default: "" }
   }]
 }, { timestamps: true });
 
