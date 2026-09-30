@@ -38,7 +38,6 @@ router.put("/settings", upload.any(), async (req, res) => {
     let dataToUpdate = JSON.parse(req.body.settingsData || "{}");
 
     if (req.files && req.files.length > 0) {
-      // Keep track of file indices for arrays
       let heroFileIndex = 0;
       let galleryFileIndex = 0;
       let badgeAvatarFileIndex = 0;
@@ -65,6 +64,11 @@ router.put("/settings", upload.any(), async (req, res) => {
           const index = parseInt(file.fieldname.split('_')[1], 10);
           if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
             dataToUpdate.testimonials[index].image = fileUrl;
+          }
+        } else if (file.fieldname.startsWith('featureIconFile_')) {
+          const index = parseInt(file.fieldname.split('_')[1], 10);
+          if (dataToUpdate.featureItems && dataToUpdate.featureItems[index]) {
+            dataToUpdate.featureItems[index].iconImage = fileUrl;
           }
         }
       });
