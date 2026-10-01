@@ -60,6 +60,8 @@ router.put("/settings", upload.any(), async (req, res) => {
             dataToUpdate.badgeAvatars[badgeAvatarFileIndex].image = fileUrl;
           }
           badgeAvatarFileIndex++;
+        } else if (file.fieldname === 'testimonialBgFile') {
+          dataToUpdate.testimonialBgImage = fileUrl; // මෙහිදී testimonialBgImage වෙත URL එක සේව් වේ
         } else if (file.fieldname.startsWith('testimonialFile_')) {
           const index = parseInt(file.fieldname.split('_')[1], 10);
           if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
@@ -84,6 +86,7 @@ router.put("/settings", upload.any(), async (req, res) => {
     await settings.save();
     res.json({ message: "Dashboard updated successfully!", settings });
   } catch (err) {
+    console.error("Backend Error:", err);
     res.status(500).json({ error: err.message });
   }
 });

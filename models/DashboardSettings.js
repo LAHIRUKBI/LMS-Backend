@@ -41,7 +41,7 @@ const DashboardSettingsSchema = new mongoose.Schema({
     platform: { type: String, required: true },
     url: { type: String, default: "" }
   }],
-  // What our clients say
+  testimonialBgImage: { type: String, default: "" },
   testimonials: [{
     image: { type: String, default: "" },
     name: { type: String, default: "" },
@@ -58,7 +58,7 @@ const DashboardSettingsSchema = new mongoose.Schema({
   featureItems: [{
     title: { type: String, default: "" },
     description: { type: String, default: "" },
-    iconType: { type: String, default: "image" }, // 'icon' or 'image'
+    iconType: { type: String, default: "image" },
     iconImage: { type: String, default: "" }
   }]
 }, { timestamps: true });
