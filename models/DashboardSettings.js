@@ -26,17 +26,18 @@ const DashboardSettingsSchema = new mongoose.Schema({
     image: { type: String, default: "" }
   }],
   badgeText: { type: String, default: "+3000 students worldwide" },
-  // Images for Hero Carousel & Gallery
   heroImages: [{
     id: Number,
     image: String,
     title: String
   }],
+  // --- Gallery Section Settings ---
+  galleryDescription: { type: String, default: "" },
   galleryItems: [{
     image: String,
-    text: String
+    text: String,
+    description: String
   }],
-  // Social Media Links
   socialLinks: [{
     platform: { type: String, required: true },
     url: { type: String, default: "" }
