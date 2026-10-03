@@ -25,7 +25,6 @@ const upload = multer({ storage: storage });
 const deleteOldFile = (filePath) => {
   if (!filePath) return;
   try {
-    // filePath can be like "/swp/filename.jpg" or "http://localhost:5000/swp/filename.jpg"
     let relativePath = filePath;
     if (filePath.startsWith("http")) {
       const urlObj = new URL(filePath);
@@ -68,7 +67,6 @@ router.put("/settings", upload.any(), async (req, res) => {
         
         if (file.fieldname === 'heroImagesFiles') {
           if (dataToUpdate.heroImages && dataToUpdate.heroImages[heroFileIndex]) {
-            // Delete old hero image if exists
             if (existingSettings && existingSettings.heroImages && existingSettings.heroImages[heroFileIndex]) {
               deleteOldFile(existingSettings.heroImages[heroFileIndex].image);
             }
