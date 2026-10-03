@@ -1,6 +1,7 @@
 const Quiz = require('../models/Quizs');
 const QuizSubmission = require('../models/QuizSubmission');
 const Notification = require('../models/Notification');
+const Class = require('../models/Class');
 
 // The teacher prepares a quiz (with images) and sends it to the admin.
 exports.createQuiz = async (req, res) => {
@@ -105,7 +106,6 @@ exports.publishQuiz = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
     
-    // frontend එකෙන් එන classIds සහ classSchedules ලබා ගැනීම
     const { classIds, classSchedules } = req.body; 
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
@@ -114,17 +114,45 @@ exports.publishQuiz = async (req, res) => {
       quiz.classIds = classIds;
       quiz.classSchedules = classSchedules || [];
       quiz.isPublished = true;
+
+      await quiz.save();
+      try {
+        const ClassRequest = require('../models/ClassRequest');
+
+        // Finding all ClassRequests that have been approved for these classes (classIds).
+        const approvedRequests = await ClassRequest.find({
+          classId: { $in: classIds },
+          status: 'Approved'
+        }).populate('studentId');
+
+        console.log(`📢 Quiz Published. Found ${approvedRequests.length} approved student requests to notify.`);
+
+        for (const reqItem of approvedRequests) {
+          if (reqItem.studentId) {
+            await Notification.create({
+              userId: reqItem.studentId._id,
+              recipientRole: 'student',
+              classId: reqItem.classId,
+              title: '📝 A new quiz has opened!',
+              message: `"${quiz.title}" A new set of questions has been added. Please log in to the class and complete it.`
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.error("Error creating quiz notifications for students:", notifErr);
+      }
+
     } else {
       quiz.classIds = [];
       quiz.classSchedules = [];
       quiz.isPublished = false;
+      await quiz.save();
     }
 
-    await quiz.save();
-    res.status(200).json({ success: true, message: 'The quiz has been published!', quiz });
+    res.status(200).json({ success: true, message: 'The quiz has been published and notifications sent successfully!', quiz });
   } catch (error) {
     console.error('Publish error:', error);
-    res.status(500).json({ success: false, error: 'An error.' });
+    res.status(500).json({ success: false, error: 'Failed to publish quiz.' });
   }
 };
 
