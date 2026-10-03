@@ -65,7 +65,7 @@ app.use('/api/auth', studentAuthRoutes);
 app.use('/Student_profile_photos', express.static(path.join(__dirname, 'Student_profile_photos')));
 app.use('/api/free-card', freeCardRoutes);
 
-// Auto-delete Cron Job (සෑම දිනකම මධ්‍යම රාත්‍රී 12ට ක්‍රියාත්මක වේ)
+// Auto-delete Cron Job (Activates at 12:00 midnight every day)
 cron.schedule('0 0 * * *', async () => {
   try {
     const settings = await NotificationSettings.findOne();
