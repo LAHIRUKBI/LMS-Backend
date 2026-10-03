@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const authMiddleware = require('../middleware/authMiddleware');
 const {uploadMaterial,getMyMaterials,deleteMyMaterial,publishMaterial,getAllMaterialsAdmin,updateMaterialStatus,deleteMaterialAdmin, getMaterialsByClass,
-  getStudentMaterials, getNewMaterialCount, clearMaterialSidebarBadge, clearMaterialCardDot} = require('../controllers/materialController');
+  getStudentMaterials, getNewMaterialCount, clearMaterialSidebarBadge, clearMaterialCardDot, getFreeMaterialsForPublic} = require('../controllers/materialController');
 
 // Automatically creating the 'uploads' folder if it does not exist.
 const uploadDir = path.join(__dirname, '../uploads');
@@ -49,6 +49,7 @@ router.put('/:id/publish', authMiddleware, publishMaterial);
 router.put('/admin/:id/status', authMiddleware, updateMaterialStatus);
 router.delete('/admin/:id', authMiddleware, deleteMaterialAdmin);
 router.delete('/:id', authMiddleware, deleteMyMaterial);
+router.get('/free/all', getFreeMaterialsForPublic);
 
 // --- Material Tracking Routes ---
 router.get('/admin/new-count', authMiddleware, getNewMaterialCount);

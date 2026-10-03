@@ -98,14 +98,14 @@ const deleteMyMaterial = async (req, res) => {
   }
 };
 
-// 4. Publish a material to selected classes (Teacher Only)
+// 4. Publish a material to selected classes or as Free (Teacher Only)
 const publishMaterial = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ message: 'Access denied. Only teachers can publish.' });
     }
 
-    const { classIds } = req.body; // පන්ති IDs Array එකක් ලෙස ලබා ගැනීම
+    const { classIds, isFree } = req.body; // classIds array එක සහ isFree boolean අගය ලබා ගැනීම
     const material = await Material.findById(req.params.id);
     if (!material) return res.status(404).json({ message: 'Material not found.' });
 
@@ -117,13 +117,17 @@ const publishMaterial = async (req, res) => {
       return res.status(400).json({ message: 'Only approved materials can be published.' });
     }
 
-    // classIds ලබා දී ඇත්නම් සහ හිස් නොවේ නම් publish කිරීම
-    if (classIds && Array.isArray(classIds) && classIds.length > 0) {
-      material.classIds = classIds;
+    // Free කර ඇත්නම් හෝ classIds ලබා දී ඇත්නම් publish කිරීම
+    const hasClasses = classIds && Array.isArray(classIds) && classIds.length > 0;
+    
+    if (hasClasses || isFree) {
+      material.classIds = hasClasses ? classIds : [];
       material.isPublished = true;
+      material.isFree = !!isFree;
     } else {
       material.classIds = [];
       material.isPublished = false;
+      material.isFree = false;
     }
 
     await material.save();
@@ -242,6 +246,19 @@ const getStudentMaterials = async (req, res) => {
   }
 };
 
+// 10. get free materials
+const getFreeMaterialsForPublic = async (req, res) => {
+  try {
+    const materials = await Material.find({ isFree: true, status: 'approved' })
+      .populate('teacherId', 'name subject')
+      .sort({ createdAt: -1 });
+    res.json(materials);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+};
+
 // --- New Material Tracking Functions ---
 
 // 1. Obtaining the quantity of new materials for the sidebar
@@ -289,5 +306,6 @@ module.exports = {
   getStudentMaterials,
   getNewMaterialCount,
   clearMaterialSidebarBadge,
-  clearMaterialCardDot
+  clearMaterialCardDot,
+  getFreeMaterialsForPublic
 };
