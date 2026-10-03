@@ -51,7 +51,7 @@ const DashboardSettingsSchema = new mongoose.Schema({
     rating: { type: Number, default: 5 }
   }],
 
-  // Second Section)
+  // Second Section
   featureBadge: { type: String, default: "Why Choose Us" },
   featureTitleLine1: { type: String, default: "Everything you need to" },
   featureTitleHighlight: { type: String, default: "excel" },
@@ -61,6 +61,13 @@ const DashboardSettingsSchema = new mongoose.Schema({
     description: { type: String, default: "" },
     iconType: { type: String, default: "image" },
     iconImage: { type: String, default: "" }
+  }],
+
+  heroStatsBadge: { type: String, default: "About Us" },
+  heroStatsTitle: { type: String, default: "We are passionate about empowering learners Worldwide with high-quality, accessible & engaging education. Our mission offering a diverse range of courses." },
+  heroStatsList: [{
+    value: { type: String, default: "" },
+    label: { type: String, default: "" }
   }]
 }, { timestamps: true });
 
