@@ -1,35 +1,35 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
-const Teacher = require('../models/Teacher'); // Teacher Model එක import කරගැනීම
+const Teacher = require('../models/Teacher');
 
-// 1. Unified Login Endpoint (Admin හෝ Teacher)
+// 1. Unified Login Endpoint (Admin or Teacher)
 const loginUser = async (req, res) => {
   try {
     const { id, password } = req.body;
 
-    // 1. මුලින්ම Admin කෙනෙක්දැයි පරීක්ෂා කිරීම
+    // 1. First, checking whether it is an admin.
     let user = await Admin.findOne({ adminId: id });
     let role = 'admin';
 
-    // 2. Admin නොවේ නම්, Teacher කෙනෙක්දැයි පරීක්ෂා කිරීම
+    // 2. Checking if the user is a teacher (if not an admin)
     if (!user) {
       user = await Teacher.findOne({ teacherId: id });
       role = 'teacher';
     }
 
-    // දෙගොල්ලොන්ගෙන්ම කෙනෙක් හමු නොවුණහොත්
+    // If a person from either side is not met
     if (!user) {
-      return res.status(400).json({ message: 'වැරදි ID එකක් හෝ Password එකක්!' });
+      return res.status(400).json({ message: 'Incorrect ID or password!' });
     }
 
-    // Password සැසඳීම
+    // Password Comparison
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: 'වැරදි ID එකක් හෝ Password එකක්!' });
+      return res.status(400).json({ message: 'Incorrect ID or password!' });
     }
 
-    // Payload එක සකස් කිරීම
+    // Preparing the payload
     const payload = {
       user: {
         id: user._id,
@@ -58,7 +58,7 @@ const registerAdmin = async (req, res) => {
 
     let existingAdmin = await Admin.findOne({ $or: [{ adminId }, { email }] });
     if (existingAdmin) {
-      return res.status(400).json({ message: 'මෙම Admin ID එක හෝ Email එක දැනටමත් භාවිතයේ පවතී!' });
+      return res.status(400).json({ message: 'This Admin ID or Email is already in use!' });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -73,7 +73,7 @@ const registerAdmin = async (req, res) => {
     });
 
     await newAdmin.save();
-    res.status(201).json({ message: 'නව Admin ගිණුම සාර්ථකව නිර්මාණය කරන ලදී!' });
+    res.status(201).json({ message: 'The new admin account was successfully created!' });
 
   } catch (err) {
     console.error(err.message);
@@ -81,7 +81,7 @@ const registerAdmin = async (req, res) => {
   }
 };
 
-// අදාල Functions සියල්ල Export කිරීම
+
 module.exports = {
   loginUser,
   registerAdmin

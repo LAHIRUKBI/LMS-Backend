@@ -4,26 +4,34 @@ const Admin = require('../models/Admin');
 
 const createDefaultAdmin = async () => {
   try {
-    const adminExists = await Admin.findOne({ adminId: 'admin' });
+    const defaultAdminId = process.env.SUPER_ADMIN_ID || 'admin';
+    const adminExists = await Admin.findOne({ adminId: defaultAdminId });
+
     if (!adminExists) {
+      const plainPassword = process.env.SUPER_ADMIN_PASSWORD;
+      if (!plainPassword) {
+        console.log('❌ Error: SUPER_ADMIN_PASSWORD is not defined in the .env file!');
+        return;
+      }
+
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash('1234', salt);
+      const hashedPassword = await bcrypt.hash(plainPassword, salt);
 
       const defaultAdmin = new Admin({
-        adminId: 'admin',
-        name: 'Super Admin',
-        email: 'admin@lms.com',
+        adminId: defaultAdminId,
+        name: process.env.SUPER_ADMIN_NAME || 'Super Admin',
+        email: process.env.SUPER_ADMIN_EMAIL || 'admin@lms.com',
         password: hashedPassword,
         isDefault: true
       });
 
       await defaultAdmin.save();
-      console.log('✅ Default Admin created : (ID: admin, Password: 1234)');
+      console.log(`✅ Default Admin created successfully`);
     } else {
       console.log('✅ The default admin already exists in the system.');
     }
   } catch (error) {
-    console.log('❌ Default Admin සෑදීමේදී දෝෂයක්: ', error);
+    console.log('❌ Error while creating the default admin: ', error);
   }
 };
 

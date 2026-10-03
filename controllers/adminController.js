@@ -127,8 +127,9 @@ const getAllAdmins = async (req, res) => {
 // 4. Delete Admin API
 const deleteAdmin = async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Permission denied!' });
+    // 1. පරිශීලකයා Admin කෙනෙක්ද සහ සුපර් ඇඩ්මින් (isDefault) කෙනෙක්ද යන්න පරීක්ෂා කිරීම
+    if (req.user.role !== 'admin' || !req.user.isDefault) {
+      return res.status(403).json({ message: 'මෙම ක්‍රියාව සිදු කිරීමට ඔබට අවසර නැත! ඇඩ්මින්වරුන් ඉවත් කළ හැක්කේ සුපර් ඇඩ්මින්ට පමණි.' });
     }
 
     const adminIdToDelete = req.params.id;
