@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Student = require('../models/Student');
+const fs = require('fs');
+const path = require('path');
 
 // 1. Student Registration (Email & Password)
 exports.registerStudent = async (req, res) => {
@@ -103,49 +105,38 @@ exports.updateStudentProfile = async (req, res) => {
   try {
     const userId = req.user.id; 
 
+    // First, retrieve the existing student's details (to delete the old photo).
+    const existingStudent = await Student.findById(userId);
+    if (!existingStudent) {
+      return res.status(404).json({ message: 'මෙම සිසුවා සොයාගැනීමට නොහැක.' });
+    }
+
     const { 
-      name, 
-      phone, 
-      address, 
-      grade, 
-      school, 
-      country, 
-      timeZone, 
-      medium, 
-      fatherName,
-      fatherOccupation,
-      fatherPhone,
-      motherName,
-      motherOccupation,
-      motherPhone,
-      hasGuardian,
-      guardianName,
-      guardianRelation,
-      guardianPhone
+      name, phone, address, grade, school, country, timeZone, medium, 
+      fatherName, fatherOccupation, fatherPhone, motherName, motherOccupation, 
+      motherPhone, hasGuardian, guardianName, guardianRelation, guardianPhone 
     } = req.body;
 
     let updateData = { 
-      name, 
-      phone, 
-      address, 
-      grade, 
-      school, 
-      country, 
-      timeZone, 
-      medium, 
-      fatherName,
-      fatherOccupation,
-      fatherPhone,
-      motherName,
-      motherOccupation,
-      motherPhone,
-      hasGuardian: hasGuardian === 'true' || hasGuardian === true,
-      guardianName,
-      guardianRelation,
-      guardianPhone
+      name, phone, address, grade, school, country, timeZone, medium, 
+      fatherName, fatherOccupation, fatherPhone, motherName, motherOccupation, 
+      motherPhone, hasGuardian: hasGuardian === 'true' || hasGuardian === true, 
+      guardianName, guardianRelation, guardianPhone 
     };
 
+    // If a new picture has been uploaded
     if (req.file) {
+      // Deleting an old picture
+      if (existingStudent.profileImage) {
+        const oldImagePath = path.join(__dirname, '..', existingStudent.profileImage);
+        if (fs.existsSync(oldImagePath)) {
+          try {
+            fs.unlinkSync(oldImagePath); //The old photo is being demoed.
+          } catch (err) {
+            console.error("Error deleting old profile image:", err);
+          }
+        }
+      }
       updateData.profileImage = `/Student_profile_photos/${req.file.filename}`;
     }
 
@@ -154,10 +145,6 @@ exports.updateStudentProfile = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     ).select('-password'); 
-
-    if (!updatedStudent) {
-      return res.status(404).json({ message: 'මෙම සිසුවා සොයාගැනීමට නොහැක.' });
-    }
 
     res.json(updatedStudent);
   } catch (err) {
