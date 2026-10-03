@@ -15,6 +15,8 @@ const materialSchema = new mongoose.Schema({
   // An array to store class IDs (Published classes)
   classIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }],
   isPublished: { type: Boolean, default: false },
+  // Free material status for public / free page viewing
+  isFree: { type: Boolean, default: false },
   // Material Tracking
   isNewForSidebar: { type: Boolean, default: true },
   isNewForTable: { type: Boolean, default: true } 
