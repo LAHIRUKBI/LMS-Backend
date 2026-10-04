@@ -295,15 +295,18 @@ exports.getQuizSubmissions = async (req, res) => {
   }
 };
 
-// යාවත්කාලීන කළ evaluateEssay මඟින් MCQ (Multiple/Single), Short සහ Essay අනු ප්‍රශ්න වල ලකුණු නිවැරදිව ගණනය කරයි
+
 // The teacher checks the paper, calculates MCQ + single + essay marks, and saves them to DB
 exports.evaluateEssay = async (req, res) => {
   try {
-    const { submissionId, essayMarks } = req.body; 
+    const { submissionId, essayMarks, teacherCorrections } = req.body;
     const sub = await QuizSubmission.findById(submissionId);
     if (!sub) return res.status(404).json({ message: 'Submission not found' });
 
     sub.essayMarks = essayMarks;
+    if (teacherCorrections) {
+      sub.teacherCorrections = teacherCorrections;
+    }
     
     const quiz = await Quiz.findById(sub.quizId);
     let autoEvaluatedScore = 0;
@@ -348,7 +351,6 @@ exports.evaluateEssay = async (req, res) => {
     if (essayMarks && typeof essayMarks === 'object') {
       Object.values(essayMarks).forEach((qMarkVal) => {
         if (typeof qMarkVal === 'object' && qMarkVal !== null) {
-          // අනු ප්‍රශ්න සඳහා දුන් ලකුණු (උදා: {0: 4, 1: 5}) එකතු කිරීම
           totalEssayMarks += Object.values(qMarkVal).reduce((sum, m) => sum + (Number(m) || 0), 0);
         } else {
           totalEssayMarks += Number(qMarkVal) || 0;
@@ -360,7 +362,7 @@ exports.evaluateEssay = async (req, res) => {
     sub.isEvaluated = true;
     await sub.save();
 
-    res.json({ success: true, message: 'Marks successfully calculated and sent to database!', sub });
+    res.json({ success: true, message: 'Marks and corrections successfully saved to database!', sub });
   } catch (err) {
     console.error("Evaluate essay error:", err);
     res.status(500).json({ success: false, error: 'Server Error' });
