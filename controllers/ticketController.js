@@ -1,21 +1,37 @@
 const Ticket = require('../models/Ticket');
 const Notification = require('../models/Notification');
+const fs = require('fs');
+const path = require('path');
 
-// 1. ගුරුවරයෙකු අලුත් Ticket එකක් සෑදූ විට Admin ට Notification එකක් යැවීම
+// 1. Sending a notification to the Admin when a teacher creates a new ticket.
 const createTicket = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Only teachers can create tickets.' });
     
     const { title, description } = req.body;
+    let attachmentUrl = null;
+    let attachmentType = null;
+
+    if (req.file) {
+      attachmentUrl = `/All_images/${req.file.filename}`;
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+        attachmentType = 'image';
+      } else {
+        attachmentType = 'document';
+      }
+    }
+
     const newTicket = new Ticket({
       teacherId: req.user.id,
       title,
-      description
+      description,
+      attachmentUrl,
+      attachmentType
     });
     
     await newTicket.save();
 
-    // Admin සඳහා Notification එකක් සෑදීම සහ ticketId එක ඇතුළත් කිරීම
     const newNotif = new Notification({
       recipientRole: 'admin',
       ticketId: newTicket._id,
@@ -24,7 +40,6 @@ const createTicket = async (req, res) => {
     });
     await newNotif.save();
 
-    // Socket.io හරහා Real-time යැවීම
     const io = req.app.get("io");
     if (io) {
       io.to("admin_room").emit("receive_admin_notification", newNotif);
@@ -37,7 +52,7 @@ const createTicket = async (req, res) => {
   }
 };
 
-// 2. ගුරුවරයෙකුගේ තමන්ගේ Tickets ලබා ගැනීම
+// 2. A teacher obtaining their own tickets
 const getMyTickets = async (req, res) => {
   try {
     const tickets = await Ticket.find({ teacherId: req.user.id }).sort({ updatedAt: -1 });
@@ -48,7 +63,7 @@ const getMyTickets = async (req, res) => {
   }
 };
 
-// 3. Admin ට සියලුම Tickets බලා ගැනීම (ගුරුවරයාගේ විස්තර ද සමඟ)
+// 3. Admin can view all tickets (including teacher details).
 const getAllTicketsAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied.' });
@@ -63,7 +78,7 @@ const getAllTicketsAdmin = async (req, res) => {
   }
 };
 
-// 4. Ticket එකකට Reply කිරීම (Teacher සහ Admin දෙගොල්ලන්ටම හැක)
+// 4. Replying to a ticket (Both teachers and admins can do this)
 const replyToTicket = async (req, res) => {
   try {
     const { message } = req.body;
@@ -71,15 +86,29 @@ const replyToTicket = async (req, res) => {
     
     if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
     
+    let attachmentUrl = null;
+    let attachmentType = null;
+
+    if (req.file) {
+      attachmentUrl = `/All_images/${req.file.filename}`;
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+        attachmentType = 'image';
+      } else {
+        attachmentType = 'document';
+      }
+    }
+
     ticket.replies.push({
       senderRole: req.user.role,
       senderId: req.user.id,
-      message
+      message,
+      attachmentUrl,
+      attachmentType
     });
 
     await ticket.save();
 
-    // Admin Reply කළොත් Teacher ට යැවීම
     if (req.user.role === 'admin') {
       const newNotif = new Notification({
         userId: ticket.teacherId,
@@ -91,9 +120,8 @@ const replyToTicket = async (req, res) => {
       await newNotif.save();
 
       const io = req.app.get("io");
-      io.to(ticket.teacherId.toString()).emit("receive_notification", newNotif);
+      if(io) io.to(ticket.teacherId.toString()).emit("receive_notification", newNotif);
     } 
-    // Teacher Reply කළොත් Admin ට යැවීම
     else if (req.user.role === 'teacher') {
       const newNotif = new Notification({
         recipientRole: 'admin',
@@ -103,7 +131,7 @@ const replyToTicket = async (req, res) => {
       await newNotif.save();
 
       const io = req.app.get("io");
-      io.to("admin_room").emit("receive_admin_notification", newNotif);
+      if(io) io.to("admin_room").emit("receive_admin_notification", newNotif);
     }
 
     res.json({ message: 'Reply added!', ticket });
@@ -113,7 +141,7 @@ const replyToTicket = async (req, res) => {
   }
 };
 
-// 5. Admin විසින් Ticket එක Close කිරීම
+// 5. Closing the ticket by the admin
 const closeTicketAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied.' });
@@ -126,13 +154,36 @@ const closeTicketAdmin = async (req, res) => {
   }
 };
 
-// 6. Admin විසින් Ticket එක මකා දැමීම
+// 6. Deletion of the ticket by the admin
 const deleteTicketAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Access denied.' });
     
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
+
+    // Remove main ticket attachment if exists
+    if (ticket.attachmentUrl) {
+      const filePath = path.join(__dirname, '..', ticket.attachmentUrl);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    // Remove replies attachments if exist
+    if (ticket.replies && ticket.replies.length > 0) {
+      ticket.replies.forEach(reply => {
+        if (reply.attachmentUrl) {
+          const replyFilePath = path.join(__dirname, '..', reply.attachmentUrl);
+          if (fs.existsSync(replyFilePath)) {
+            fs.unlinkSync(replyFilePath);
+          }
+        }
+      });
+    }
+
     await Ticket.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Ticket deleted successfully' });
+    res.json({ message: 'Ticket and associated files deleted successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
