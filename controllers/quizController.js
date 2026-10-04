@@ -16,7 +16,6 @@ exports.createQuiz = async (req, res) => {
     // Checking the images uploaded via `req.files` and providing the path for the relevant question.
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
-        // It checks the field names 'questionImage_0' and 'questionImage_1' sent from the frontend.
         const indexParts = file.fieldname.split('_');
         if (indexParts.length === 2) {
           const qIndex = parseInt(indexParts[1], 10);
@@ -27,12 +26,32 @@ exports.createQuiz = async (req, res) => {
       });
     }
 
+    // දත්ත වල ප්‍රශ්න වර්ග (mcq, single, short, essay) සහ subQuestions නිවැරදිව සකස් කිරීම
+    const formattedQuestions = questions.map((q) => {
+      let totalMarks = q.marks || 5;
+      
+      // Essay ප්‍රශ්න සඳහා අනු ප්‍රශ්න තිබේ නම්, ඒවායේ ලකුණු එකතුව ප්‍රශ්නයේ සම්පූර්ණ ලකුණු ලෙස ගැනීම
+      if (q.type === 'essay' && q.subQuestions && q.subQuestions.length > 0) {
+        totalMarks = q.subQuestions.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
+      }
+
+      return {
+        type: q.type,
+        questionText: q.questionText,
+        imageUrl: q.imageUrl || '',
+        options: q.options || [],
+        correctAnswer: q.correctAnswer || '', // MCQ සඳහා Array එකක් හෝ වෙනත් ඒවා සඳහා String එකක් විය හැක
+        marks: totalMarks,
+        subQuestions: q.subQuestions || []
+      };
+    });
+
     const newQuiz = new Quiz({
       teacherId: req.user.id,
       title,
       description,
       duration,
-      questions,
+      questions: formattedQuestions,
       status: 'pending'
     });
 
@@ -119,13 +138,10 @@ exports.publishQuiz = async (req, res) => {
       try {
         const ClassRequest = require('../models/ClassRequest');
 
-        // Finding all ClassRequests that have been approved for these classes (classIds).
         const approvedRequests = await ClassRequest.find({
           classId: { $in: classIds },
           status: 'Approved'
         }).populate('studentId');
-
-        console.log(`📢 Quiz Published. Found ${approvedRequests.length} approved student requests to notify.`);
 
         for (const reqItem of approvedRequests) {
           if (reqItem.studentId) {
@@ -168,32 +184,26 @@ exports.deleteTeacherQuiz = async (req, res) => {
   }
 };
 
-// Providing quizzes for a class (exported and corrected)
 exports.getQuizzesByClass = async (req, res) => {
   try {
     const classId = req.params.classId;
-    const now = new Date(); // වර්තමාන දිනය සහ වේලාව
+    const now = new Date();
 
-    // අදාළ පන්තියට publish කර ඇති සියලුම approved quizzes ලබා ගැනීම
     const allQuizzes = await Quiz.find({ 
       classIds: classId,
       isPublished: true,
       status: 'approved' 
     }).sort({ createdAt: -1 });
 
-    // Schedule වෙලාවන්ට අනුව අදාළ කාල සීමාව තුළ පවතින quizzes පමණක් ෆිල්ටර් කර ගැනීම
     const validQuizzes = allQuizzes.filter(quiz => {
-      // මෙම පන්තිය සඳහා අදාළ schedule විස්තරය සොයා ගැනීම
       const schedule = quiz.classSchedules?.find(
         sch => (sch.classId?._id?.toString() || sch.classId?.toString()) === classId.toString()
       );
 
-      // schedule එකක් හමු නොවුණහොත් හෝ publishType එක 'now' නම් සාමාන්‍ය පරිදි පෙන්වන්න
       if (!schedule || schedule.publishType === 'now') {
         return true;
       }
 
-      // 'schedule' කර ඇත්නම් වෙලාවන් පරීක්ෂා කිරීම
       if (schedule.publishType === 'schedule') {
         const startDateTime = schedule.startDate && schedule.startTime 
           ? new Date(`${schedule.startDate.toISOString().split('T')[0]}T${schedule.startTime}`)
@@ -203,7 +213,6 @@ exports.getQuizzesByClass = async (req, res) => {
           ? new Date(`${schedule.endDate.toISOString().split('T')[0]}T${schedule.endTime}`)
           : (schedule.endDate ? new Date(schedule.endDate) : null);
 
-        // ආරම්භක වේලාවට පසු වී තිබේද සහ අවසන් වේලාවට පෙර වී තිබේද යන්න පරීක්ෂා කිරීම
         const isAfterStart = startDateTime ? now >= startDateTime : true;
         const isBeforeEnd = endDateTime ? now <= endDateTime : true;
 
@@ -220,7 +229,6 @@ exports.getQuizzesByClass = async (req, res) => {
   }
 };
 
-// Retrieving a specific quiz using the ID
 exports.getQuizById = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
@@ -234,8 +242,6 @@ exports.getQuizById = async (req, res) => {
   }
 };
 
-
-// A student submitting a quiz
 exports.submitQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -259,7 +265,6 @@ exports.submitQuiz = async (req, res) => {
       maxScore += q.marks || 5;
     });
 
-    // ගුරුවරයා පරීක්ෂා කරන තුරු score එක 0 ලෙස හෝ evaluated නැතිව තැන්පත් කිරීම
     const newSub = new QuizSubmission({
       quizId,
       studentId,
@@ -278,7 +283,6 @@ exports.submitQuiz = async (req, res) => {
   }
 };
 
-// Retrieving all student submissions for the quiz assigned to the teacher.
 exports.getQuizSubmissions = async (req, res) => {
   try {
     const quizId = req.params.id;
@@ -291,7 +295,8 @@ exports.getQuizSubmissions = async (req, res) => {
   }
 };
 
-// The teacher checks the paper, calculates MCQ + essay marks, and sends/saves them to DB upon clicking Send
+// යාවත්කාලීන කළ evaluateEssay මඟින් MCQ (Multiple/Single), Short සහ Essay අනු ප්‍රශ්න වල ලකුණු නිවැරදිව ගණනය කරයි
+// The teacher checks the paper, calculates MCQ + single + essay marks, and saves them to DB
 exports.evaluateEssay = async (req, res) => {
   try {
     const { submissionId, essayMarks } = req.body; 
@@ -301,43 +306,67 @@ exports.evaluateEssay = async (req, res) => {
     sub.essayMarks = essayMarks;
     
     const quiz = await Quiz.findById(sub.quizId);
-    let mcqOnlyScore = 0;
+    let autoEvaluatedScore = 0;
 
     const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
 
+    // 1. Objective ප්‍රශ්න (MCQ, Single, Short) සඳහා ස්වයංක්‍රීයව ලකුණු පරීක්ෂා කිරීම
     quiz.questions.forEach((q) => {
       const qId = q._id.toString();
-      if (q.type === 'mcq' || q.type === 'short') {
+      
+      if (q.type === 'single' || q.type === 'short') {
         const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
         const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
         const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
         const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
 
-        if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(cleanStudent)) {
-          mcqOnlyScore += q.marks || 5;
+        if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(studentAns)) {
+          autoEvaluatedScore += q.marks || 5;
+        }
+      } 
+      else if (q.type === 'mcq') {
+        const studentAns = studentAnswers[qId]; 
+        const correctAnswers = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
+
+        if (Array.isArray(studentAns)) {
+          const isAllCorrect = correctAnswers.every(ans => studentAns.includes(ans)) && 
+                               studentAns.every(ans => correctAnswers.includes(ans));
+          if (isAllCorrect) {
+            autoEvaluatedScore += q.marks || 3;
+          }
+        } else if (typeof studentAns === 'string' && correctAnswers.includes(studentAns)) {
+          if (correctAnswers.length === 1) {
+            autoEvaluatedScore += q.marks || 3;
+          }
         }
       }
     });
 
+    // 2. Essay අනු ප්‍රශ්න (Sub-questions) සඳහා ගුරුවරයා ලබාදුන් ලකුණු එකතුව ගණනය කිරීම
     let totalEssayMarks = 0;
-    if (essayMarks) {
-      totalEssayMarks = Object.values(essayMarks).reduce((a, b) => Number(a) + Number(b), 0);
+    if (essayMarks && typeof essayMarks === 'object') {
+      Object.values(essayMarks).forEach((qMarkVal) => {
+        if (typeof qMarkVal === 'object' && qMarkVal !== null) {
+          // අනු ප්‍රශ්න සඳහා දුන් ලකුණු (උදා: {0: 4, 1: 5}) එකතු කිරීම
+          totalEssayMarks += Object.values(qMarkVal).reduce((sum, m) => sum + (Number(m) || 0), 0);
+        } else {
+          totalEssayMarks += Number(qMarkVal) || 0;
+        }
+      });
     }
 
-    // ගුරුවරයා Send / Save කළ පසු පමණක් ලකුණු දත්ත ගබඩාවේ තැන්පත් වේ
-    sub.score = mcqOnlyScore + totalEssayMarks;
+    sub.score = autoEvaluatedScore + totalEssayMarks;
     sub.isEvaluated = true;
     await sub.save();
 
     res.json({ success: true, message: 'Marks successfully calculated and sent to database!', sub });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
+    console.error("Evaluate essay error:", err);
+    res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
 
-// Checking whether a student has already attempted this quiz
 exports.checkQuizSubmission = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -359,7 +388,6 @@ exports.checkQuizSubmission = async (req, res) => {
   }
 };
 
-// 1. Retrieving the number of new quizzes for the sidebar
 exports.getNewQuizCount = async (req, res) => {
   try {
     const count = await Quiz.countDocuments({ isNewForSidebar: true });
@@ -370,7 +398,6 @@ exports.getNewQuizCount = async (req, res) => {
   }
 };
 
-// 2. Removing the number when the sidebar is clicked
 exports.clearQuizSidebarBadge = async (req, res) => {
   try {
     await Quiz.updateMany({ isNewForSidebar: true }, { isNewForSidebar: false });
@@ -381,7 +408,6 @@ exports.clearQuizSidebarBadge = async (req, res) => {
   }
 };
 
-// 3. Removing the dot from the card/table.
 exports.clearQuizCardDot = async (req, res) => {
   try {
     await Quiz.findByIdAndUpdate(req.params.id, { isNewForTable: false });
@@ -391,10 +417,6 @@ exports.clearQuizCardDot = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
-
-
-
-// controllers/quizController.js (මෙය අලුතින් හෝ අදාළ ස්ථානයට එකතු කරන්න)
 
 exports.evaluateAllMCQQuizzes = async (req, res) => {
   try {
@@ -406,29 +428,25 @@ exports.evaluateAllMCQQuizzes = async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'Quiz not found.' });
 
-    // සියලුම MCQ ප්‍රශ්න පමණක් දැයි පරීක්ෂා කිරීම (අවශ්‍ය නම්)
     const submissions = await QuizSubmission.find({ quizId });
 
     for (let sub of submissions) {
-      let mcqScore = 0;
+      let score = 0;
       const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
 
       quiz.questions.forEach((q) => {
         const qId = q._id.toString();
-        if (q.type === 'mcq' || q.type === 'short') {
+        if (q.type === 'single' || q.type === 'short') {
           const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
           const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-          const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
-          const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
-
-          if (cleanStudent === cleanCorrect) {
-            mcqScore += q.marks || 5;
+          if (studentAns.replace(/[^a-z0-9]/g, '') === correctAns.replace(/[^a-z0-9]/g, '')) {
+            score += q.marks || 5;
           }
         }
       });
 
-      sub.score = mcqScore;
+      sub.score = score;
       sub.isEvaluated = true;
       await sub.save();
     }
@@ -439,7 +457,6 @@ exports.evaluateAllMCQQuizzes = async (req, res) => {
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
-
 
 exports.deleteQuizSubmission = async (req, res) => {
   try {
@@ -453,7 +470,6 @@ exports.deleteQuizSubmission = async (req, res) => {
   }
 };
 
-
 exports.sendSubmissionToStudent = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -465,7 +481,6 @@ exports.sendSubmissionToStudent = async (req, res) => {
     sub.isSentToStudent = true;
     await sub.save();
 
-    // සිසුවාට Notification එකක් යැවීම
     await Notification.create({
       userId: sub.studentId,
       recipientRole: 'student',
@@ -480,8 +495,6 @@ exports.sendSubmissionToStudent = async (req, res) => {
   }
 };
 
-
-// සිසුවාට අදාළ ලකුණු ලබා දීම සඳහා (Student My Results API)
 exports.getStudentQuizResults = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -498,8 +511,6 @@ exports.getStudentQuizResults = async (req, res) => {
   }
 };
 
-
-// සියලුම සිසුන්ට එකවර ප්‍රතිඵල යැවීම සඳහා
 exports.sendAllSubmissionsToStudents = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -507,7 +518,6 @@ exports.sendAllSubmissionsToStudents = async (req, res) => {
     }
     const quizId = req.params.quizId;
     
-    // අදාළ quiz එකට අදාළ submissions සියල්ල ලබා ගැනීම
     const submissions = await QuizSubmission.find({ quizId }).populate('quizId');
     if (submissions.length === 0) {
       return res.status(404).json({ success: false, message: 'No submissions found for this quiz.' });
@@ -515,10 +525,8 @@ exports.sendAllSubmissionsToStudents = async (req, res) => {
 
     const quizTitle = submissions[0].quizId?.title || 'Quiz';
 
-    // සියල්ල update කිරීම
     await QuizSubmission.updateMany({ quizId }, { isSentToStudent: true });
 
-    // සෑම සිසුවෙකුටම වෙන වෙනම Notification නිර්මාණය කිරීම
     const notificationPromises = submissions.map(sub => {
       return Notification.create({
         userId: sub.studentId,
