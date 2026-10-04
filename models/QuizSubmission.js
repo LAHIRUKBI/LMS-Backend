@@ -10,6 +10,7 @@ const quizSubmissionSchema = new mongoose.Schema({
   score: { type: Number, default: 0 },
   maxScore: { type: Number, default: 0 },
   essayMarks: { type: mongoose.Schema.Types.Mixed, default: {} }, // questionId -> marks given by teacher
+  teacherCorrections: { type: mongoose.Schema.Types.Mixed, default: {} },
   isEvaluated: { type: Boolean, default: false },
   isSentToStudent: { type: Boolean, default: false },
   submittedAt: { type: Date, default: Date.now },
