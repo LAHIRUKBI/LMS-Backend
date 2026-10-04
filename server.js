@@ -45,6 +45,7 @@ app.use('/advertisement', express.static(path.join(__dirname, 'advertisement')))
 app.use('/swp', express.static(path.join(__dirname, 'swp')));
 app.use('/Class_Cover_images', express.static(path.join(__dirname, 'Class_Cover_images')));
 app.use('/free_card_request', express.static(path.join(__dirname, 'free_card_request')));
+app.use('/All_images', express.static(path.join(__dirname, 'All_images')));
 
 // LMS System API Routes
 app.use('/api/auth', authRoutes);
