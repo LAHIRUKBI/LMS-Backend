@@ -1,17 +1,24 @@
-//models/Quiz.js
-
 const mongoose = require('mongoose');
 
-const questionSchema = new mongoose.Schema({
-  type: { type: String, enum: ['mcq', 'short', 'essay'], required: true },
-  questionText: { type: String, required: true },
-  imageUrl: { type: String },
-  options: [{ type: String }],
-  correctAnswer: { type: String, required: true }, // රහස් පිළිතුර
+// 1. Essay ප්‍රශ්න සඳහා අනු අංක යටතේ (Sub-questions) දත්ත ගබඩා කිරීමේ Schema එක
+const subQuestionSchema = new mongoose.Schema({
+  subQuestionText: { type: String, required: true },
   marks: { type: Number, required: true, default: 5 }
 });
 
-// නව Class Schedule Schema එකක් එකතු කිරීම (පවතින කිසිවක් මකා දැමීමකින් තොරව)
+const questionSchema = new mongoose.Schema({
+  // 'single' සහ 'essay' වර්ග අලුතින් එකතු කරන ලදී (පවතින mcq, short ඉවත් කර නැත)
+  type: { type: String, enum: ['mcq', 'single', 'short', 'essay'], required: true },
+  questionText: { type: String, required: true },
+  imageUrl: { type: String },
+  options: [{ type: String }],
+  // Multiple Choice සඳහා array එකක් හෝ Single/Short සඳහා string එකක් ලෙස ගබඩා කළ හැකි වන සේ Mixed භාවිතා කරන ලදී
+  correctAnswer: { type: mongoose.Schema.Types.Mixed }, 
+  marks: { type: Number, required: true, default: 3 },
+  subQuestions: [subQuestionSchema] // Essay ප්‍රශ්න සඳහා අනු ප්‍රශ්න (Sub-questions) ලැයිස්තුව
+});
+
+// නව Class Schedule Schema එක (පවතින පරිදිම ඇත)
 const classScheduleSchema = new mongoose.Schema({
   classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
   publishType: { type: String, enum: ['now', 'schedule'], default: 'now' },
@@ -29,7 +36,7 @@ const quizSchema = new mongoose.Schema({
   questions: [questionSchema],
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   rejectReason: { type: String, default: "" }, // Reason for rejection
-  classIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }], // Added an array to store class IDs (similar to the one for materials).
+  classIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Class' }], 
   classSchedules: [classScheduleSchema], // නව scheduled විස්තර සදහා
   isPublished: { type: Boolean, default: false },
   // ---(New Quiz Tracking)---
