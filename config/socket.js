@@ -1,4 +1,5 @@
 const { Server } = require('socket.io');
+const Student = require('../models/Student');
 
 const setupSocket = (server, app) => {
   const io = new Server(server, {
@@ -21,12 +22,45 @@ const setupSocket = (server, app) => {
       console.log("An Admin joined the admin_room");
     });
 
-    socket.on("disconnect", () => {
+    // When the student joins
+    socket.on("student_connected", async (studentId) => {
+      if (studentId) {
+        socket.studentId = studentId; // It is very important to assign an ID to the socket instance.
+        try {
+          await Student.findByIdAndUpdate(studentId, { isOnline: true });
+          io.emit("student_online", { studentId, isOnline: true });
+        } catch (err) {
+          console.error("Error setting student online:", err);
+        }
+      }
+    });
+
+    // When the student logs out or closes the tab (disconnects)
+    socket.on("student_logout", async (studentId) => {
+      const idToOffline = studentId || socket.studentId;
+      if (idToOffline) {
+        try {
+          await Student.findByIdAndUpdate(idToOffline, { isOnline: false });
+          io.emit("student_online", { studentId: idToOffline, isOnline: false });
+        } catch (err) {
+          console.error("Error setting student offline:", err);
+        }
+      }
+    });
+
+    socket.on("disconnect", async () => {
       console.log("User Disconnected", socket.id);
+      if (socket.studentId) {
+        try {
+          await Student.findByIdAndUpdate(socket.studentId, { isOnline: false });
+          io.emit("student_online", { studentId: socket.studentId, isOnline: false });
+        } catch (err) {
+          console.error("Error setting student offline on disconnect:", err);
+        }
+      }
     });
   });
 
-  // Routes වලට (ticketRoutes.js) Socket.io instance එක ලබා දීම
   app.set("io", io);
 };
 
