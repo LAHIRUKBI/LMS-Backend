@@ -5,7 +5,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const { createClass, getTeacherClasses, deleteClass, getAllClassesForAdmin, requestClass, getStudentRequests, getAllClassRequests, updateRequestStatus , deleteClassRequest, adminUpdateClass } = require('../controllers/classController');
+const { createClass, getTeacherClasses, deleteClass, getAllClassesForAdmin, requestClass, getStudentRequests, getAllClassRequests, updateRequestStatus , deleteClassRequest, adminUpdateClass,
+  updateTeacherClass } = require('../controllers/classController');
 
 // Configure multer storage for Class_Cover_images
 const storage = multer.diskStorage({
@@ -24,6 +25,7 @@ const upload = multer({ storage });
 
 router.post('/create', authMiddleware, upload.single('coverImage'), createClass);
 router.get('/my-classes', authMiddleware, getTeacherClasses);
+router.put('/teacher/update/:id', authMiddleware, upload.single('coverImage'), updateTeacherClass);
 router.delete('/:id', authMiddleware, deleteClass);
 
 // The route to access all classes for Admins and Students.

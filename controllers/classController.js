@@ -8,18 +8,45 @@ exports.createClass = async (req, res) => {
       return res.status(403).json({ message: 'Permission denied.' });
     }
 
-    const { grade, medium, mode, day, startTime, endTime, description } = req.body;
+    const { 
+      grade, 
+      customGradeName, 
+      medium, 
+      mode, 
+      onlineLink, 
+      provideLater, 
+      linkDisplayMode,
+      linkStartDateTime,
+      linkEndDateTime,
+      instituteName, 
+      instituteAddress, 
+      day, 
+      startTime, 
+      endTime, 
+      description 
+    } = req.body;
     
     let coverImage = "";
     if (req.file) {
       coverImage = `/Class_Cover_images/${req.file.filename}`;
     }
 
+    const isProvideLater = provideLater === 'true' || provideLater === true;
+    const displayMode = linkDisplayMode || 'scheduled';
+
     const newClass = new Class({
       teacherId: req.user.id,
       grade,
+      customGradeName: grade === 'Other' ? customGradeName : "",
       medium,
       mode,
+      onlineLink: mode === 'Online' && !isProvideLater ? onlineLink : "",
+      provideLater: isProvideLater,
+      linkDisplayMode: displayMode,
+      linkStartDateTime: (mode === 'Online' && !isProvideLater && displayMode === 'scheduled' && linkStartDateTime) ? new Date(linkStartDateTime) : null,
+      linkEndDateTime: (mode === 'Online' && !isProvideLater && displayMode === 'scheduled' && linkEndDateTime) ? new Date(linkEndDateTime) : null,
+      instituteName: mode === 'Offline' ? instituteName : "",
+      instituteAddress: mode === 'Offline' ? instituteAddress : "",
       day,
       startTime,
       endTime,
@@ -33,6 +60,24 @@ exports.createClass = async (req, res) => {
     console.error(err);
     res.status(500).send('Server Error');
   }
+};
+
+// Scheduled නම් සහ කාලය ඉකුත් වී ඇත්නම් expired වීම
+const checkAndExpireLinks = async (classesList) => {
+  const now = new Date();
+  let modified = false;
+
+  for (let cls of classesList) {
+    if (cls.onlineLink && !cls.provideLater && cls.linkDisplayMode === 'scheduled' && cls.linkEndDateTime && new Date(cls.linkEndDateTime) < now) {
+      cls.onlineLink = "";
+      cls.provideLater = true;
+      cls.linkStartDateTime = null;
+      cls.linkEndDateTime = null;
+      await cls.save();
+      modified = true;
+    }
+  }
+  return classesList;
 };
 
 // 2. Retrieving the list of classes assigned to the relevant teacher (Get Classes)
@@ -73,12 +118,13 @@ exports.deleteClass = async (req, res) => {
 
 
 // 4. Retrieve all class data for the admin (Admin Get All Classes)
+// Get All Classes for Admin / Students (මෙතැනදීද ළමයාට පෙන්වන විට expired වූ links ඉවත් වේ)
 exports.getAllClassesForAdmin = async (req, res) => {
   try {
-    // Populating class data with teacher data
-    const classes = await Class.find()
+    let classes = await Class.find()
       .populate('teacherId', 'name profilePhoto subject teacherId')
       .sort({ createdAt: -1 });
+    classes = await checkAndExpireLinks(classes);
     res.json(classes);
   } catch (err) {
     console.error(err);
@@ -230,6 +276,61 @@ exports.adminUpdateClass = async (req, res) => {
     }
 
     res.json({ message: 'Class details successfully updated by admin!', classData: updatedClass });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+
+// නව ක්‍රමවේදය: ගුරුවරයාට තමන්ගේ පන්තිය Update කිරීම සඳහා (Link එක දැමීමට, වෙනස් කිරීමට හෝ Close කිරීමට)
+// Teacher Update Class (Updated to support forcing immediate open on scheduled links)
+exports.updateTeacherClass = async (req, res) => {
+  try {
+    if (req.user.role !== 'teacher') {
+      return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    const classId = req.params.id;
+    const { 
+      onlineLink, 
+      provideLater, 
+      linkDisplayMode,
+      linkStartDateTime,
+      linkEndDateTime,
+      description,
+      instituteName,
+      instituteAddress
+    } = req.body;
+
+    const classItem = await Class.findOne({ _id: classId, teacherId: req.user.id });
+    if (!classItem) {
+      return res.status(404).json({ message: 'Class not found or permission denied.' });
+    }
+
+    if (onlineLink !== undefined) classItem.onlineLink = onlineLink;
+    if (provideLater !== undefined) classItem.provideLater = provideLater;
+    if (linkDisplayMode !== undefined) classItem.linkDisplayMode = linkDisplayMode;
+    
+    // જો immediate නම් dates null වේ, scheduled නම් නව කාලසීමාව ඇතුළත් වේ
+    if (linkDisplayMode === 'immediate') {
+      classItem.linkStartDateTime = null;
+      classItem.linkEndDateTime = null;
+    } else {
+      if (linkStartDateTime !== undefined) classItem.linkStartDateTime = linkStartDateTime ? new Date(linkStartDateTime) : null;
+      if (linkEndDateTime !== undefined) classItem.linkEndDateTime = linkEndDateTime ? new Date(linkEndDateTime) : null;
+    }
+
+    if (description !== undefined) classItem.description = description;
+    if (instituteName !== undefined) classItem.instituteName = instituteName;
+    if (instituteAddress !== undefined) classItem.instituteAddress = instituteAddress;
+
+    if (req.file) {
+      classItem.coverImage = `/Class_Cover_images/${req.file.filename}`;
+    }
+
+    await classItem.save();
+    res.json({ message: 'Class successfully updated!', classData: classItem });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
