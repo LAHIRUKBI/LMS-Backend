@@ -55,8 +55,18 @@ exports.loginStudent = async (req, res) => {
       return res.status(400).json({ message: 'Incorrect email address or password.' });
     }
 
+    // Updating `isOnline: true` in the database as soon as the child logs in.
+    student.isOnline = true;
+    await student.save();
+
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // Emitting a socket event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('student_online', { studentId: student._id, isOnline: true });
+    }
 
     res.json({ token, user: student, message: 'Login successful!' });
   } catch (err) {
@@ -73,14 +83,12 @@ exports.googleAuthStudent = async (req, res) => {
     let student = await Student.findOne({ email });
 
     if (!student) {
-      // If this request originated from the login page and the student does not exist, an error is returned.
       if (!isRegister) {
         return res.status(400).json({ 
           message: 'This Google account is not registered. Please sign up first.' 
         });
       }
 
-      // Creating a new account via the Register page
       student = new Student({
         name,
         email,
@@ -88,14 +96,23 @@ exports.googleAuthStudent = async (req, res) => {
       });
       await student.save();
     }
+    // Updating `isOnline: true` in the database immediately upon logging in via Google.
+    student.isOnline = true;
+    await student.save();
 
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
+    // Emitting a socket event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('student_online', { studentId: student._id, isOnline: true });
+    }
+
     res.json({ token, user: student, message: 'Google authentication successful!' });
   } catch (err) {
     console.error(err);
-    res.status(550).send('Server Error');
+    res.status(500).send('Server Error');
   }
 };
 
@@ -108,7 +125,7 @@ exports.updateStudentProfile = async (req, res) => {
     // First, retrieve the existing student's details (to delete the old photo).
     const existingStudent = await Student.findById(userId);
     if (!existingStudent) {
-      return res.status(404).json({ message: 'මෙම සිසුවා සොයාගැනීමට නොහැක.' });
+      return res.status(404).json({ message: 'This student cannot be found.' });
     }
 
     const { 
@@ -149,6 +166,25 @@ exports.updateStudentProfile = async (req, res) => {
     res.json(updatedStudent);
   } catch (err) {
     console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// 5. Student Logout (isOnline: false කිරීම සඳහා)
+exports.logoutStudent = async (req, res) => {
+  try {
+    const studentId = req.body.studentId || (req.user ? req.user.id : null);
+    if (studentId) {
+      await Student.findByIdAndUpdate(studentId, { isOnline: false });
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('student_online', { studentId, isOnline: false });
+      }
+    }
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    console.error("Logout error:", err);
     res.status(500).send('Server Error');
   }
 };

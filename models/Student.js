@@ -23,6 +23,7 @@ const studentSchema = new mongoose.Schema({
   guardianName: { type: String, default: "" },
   guardianRelation: { type: String, default: "" },
   guardianPhone: { type: String, default: "" },
+  isOnline: { type: Boolean, default: false },
 
   isNewForSidebar: { type: Boolean, default: true },
   isNewForTable: { type: Boolean, default: true },
