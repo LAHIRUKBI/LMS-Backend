@@ -238,11 +238,29 @@ exports.updateRequestStatus = async (req, res) => {
 };
 
 // 9. Complete removal of the student's class request by the admin (Delete Student Request)
+// 9. Complete removal or canceling of the student's class request (Student can cancel their pending request, Admin can delete any)
 exports.deleteClassRequest = async (req, res) => {
   try {
     const requestId = req.params.id;
-    const deleted = await ClassRequest.findByIdAndDelete(requestId);
     
+    // If the user is a student (case-insensitive check), ensure they can only delete their own 'Pending' request
+    if (req.user.role && req.user.role.toLowerCase() === 'student') {
+      const requestItem = await ClassRequest.findOne({ _id: requestId, studentId: req.user.id });
+      
+      if (!requestItem) {
+        return res.status(404).json({ message: 'The request cannot be found or you do not have permission.' });
+      }
+      
+      if (requestItem.status !== 'Pending') {
+        return res.status(400).json({ message: 'You can only cancel pending requests.' });
+      }
+
+      await ClassRequest.findByIdAndDelete(requestId);
+      return res.json({ message: 'The request was successfully cancelled.' });
+    }
+
+    // For admin or other authorized roles
+    const deleted = await ClassRequest.findByIdAndDelete(requestId);
     if (!deleted) {
       return res.status(404).json({ message: 'The request cannot be found.' });
     }
