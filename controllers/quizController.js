@@ -299,7 +299,7 @@ exports.getQuizSubmissions = async (req, res) => {
 // The teacher checks the paper, calculates MCQ + single + essay marks, and saves them to DB
 exports.evaluateEssay = async (req, res) => {
   try {
-    const { submissionId, essayMarks, teacherCorrections } = req.body;
+    const { submissionId, essayMarks, teacherCorrections, overrideScore } = req.body;
     const sub = await QuizSubmission.findById(submissionId);
     if (!sub) return res.status(404).json({ message: 'Submission not found' });
 
@@ -308,57 +308,60 @@ exports.evaluateEssay = async (req, res) => {
       sub.teacherCorrections = teacherCorrections;
     }
     
-    const quiz = await Quiz.findById(sub.quizId);
-    let autoEvaluatedScore = 0;
+    // If the correctly calculated `overrideScore` is received from the frontend, use it directly as the score (to prevent the addition of extra points).
+    if (overrideScore !== undefined && overrideScore !== null) {
+      sub.score = Number(overrideScore) || 0;
+    } else {
+      const quiz = await Quiz.findById(sub.quizId);
+      let autoEvaluatedScore = 0;
+      const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
 
-    const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
+      quiz.questions.forEach((q) => {
+        const qId = q._id.toString();
+        
+        if (q.type === 'single' || q.type === 'short') {
+          const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
+          const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-    // 1. Objective ප්‍රශ්න (MCQ, Single, Short) සඳහා ස්වයංක්‍රීයව ලකුණු පරීක්ෂා කිරීම
-    quiz.questions.forEach((q) => {
-      const qId = q._id.toString();
-      
-      if (q.type === 'single' || q.type === 'short') {
-        const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
-        const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
+          const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
+          const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
 
-        const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
-        const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
-
-        if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(studentAns)) {
-          autoEvaluatedScore += q.marks || 5;
-        }
-      } 
-      else if (q.type === 'mcq') {
-        const studentAns = studentAnswers[qId]; 
-        const correctAnswers = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
-
-        if (Array.isArray(studentAns)) {
-          const isAllCorrect = correctAnswers.every(ans => studentAns.includes(ans)) && 
-                               studentAns.every(ans => correctAnswers.includes(ans));
-          if (isAllCorrect) {
-            autoEvaluatedScore += q.marks || 3;
+          if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(studentAns)) {
+            autoEvaluatedScore += q.marks || 5;
           }
-        } else if (typeof studentAns === 'string' && correctAnswers.includes(studentAns)) {
-          if (correctAnswers.length === 1) {
-            autoEvaluatedScore += q.marks || 3;
-          }
-        }
-      }
-    });
+        } 
+        else if (q.type === 'mcq') {
+          const studentAns = studentAnswers[qId]; 
+          const correctAnswers = Array.isArray(q.correctAnswer) ? q.correctAnswer : [q.correctAnswer];
 
-    // 2. Essay අනු ප්‍රශ්න (Sub-questions) සඳහා ගුරුවරයා ලබාදුන් ලකුණු එකතුව ගණනය කිරීම
-    let totalEssayMarks = 0;
-    if (essayMarks && typeof essayMarks === 'object') {
-      Object.values(essayMarks).forEach((qMarkVal) => {
-        if (typeof qMarkVal === 'object' && qMarkVal !== null) {
-          totalEssayMarks += Object.values(qMarkVal).reduce((sum, m) => sum + (Number(m) || 0), 0);
-        } else {
-          totalEssayMarks += Number(qMarkVal) || 0;
+          if (Array.isArray(studentAns)) {
+            const isAllCorrect = correctAnswers.every(ans => studentAns.includes(ans)) && 
+                                 studentAns.every(ans => correctAnswers.includes(ans));
+            if (isAllCorrect) {
+              autoEvaluatedScore += q.marks || 3;
+            }
+          } else if (typeof studentAns === 'string' && correctAnswers.includes(studentAns)) {
+            if (correctAnswers.length === 1) {
+              autoEvaluatedScore += q.marks || 3;
+            }
+          }
         }
       });
+
+      let totalEssayMarks = 0;
+      if (essayMarks && typeof essayMarks === 'object') {
+        Object.values(essayMarks).forEach((qMarkVal) => {
+          if (typeof qMarkVal === 'object' && qMarkVal !== null) {
+            totalEssayMarks += Object.values(qMarkVal).reduce((sum, m) => sum + (Number(m) || 0), 0);
+          } else {
+            totalEssayMarks += Number(qMarkVal) || 0;
+          }
+        });
+      }
+
+      sub.score = autoEvaluatedScore + totalEssayMarks;
     }
 
-    sub.score = autoEvaluatedScore + totalEssayMarks;
     sub.isEvaluated = true;
     await sub.save();
 
