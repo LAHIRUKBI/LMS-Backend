@@ -9,7 +9,8 @@ const {
   loginStudent, 
   googleAuthStudent,
   updateStudentProfile,
-  logoutStudent 
+  logoutStudent,
+  forceOfflineStudent 
 } = require('../controllers/studentAuthController');
 
 // Multer Storage Configuration
@@ -29,6 +30,7 @@ router.post('/student/register', registerStudent);
 router.post('/student/login', loginStudent);
 router.post('/student/google', googleAuthStudent);
 router.post('/student/logout', logoutStudent);
+router.post('/student/force-offline', forceOfflineStudent);
 
 // Profile Update Route (upload.single('profileImage') added)
 router.put('/student/profile', studentAuthMiddleware, upload.single('profileImage'), updateStudentProfile);
