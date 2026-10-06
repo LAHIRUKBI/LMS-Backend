@@ -188,3 +188,30 @@ exports.logoutStudent = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
+// To go offline immediately upon closing the tab
+exports.forceOfflineStudent = async (req, res) => {
+  try {
+    // Retrieving the studentId from req.body, req.query, or req.params
+    const studentId = req.body?.studentId || req.query?.studentId || req.body;
+    
+    // To handle plain text received via sendBeacon
+    let finalStudentId = studentId;
+    if (typeof req.body === 'string' && req.body.startsWith('studentId=')) {
+      finalStudentId = req.body.split('=')[1];
+    }
+
+    if (finalStudentId) {
+      await Student.findByIdAndUpdate(finalStudentId, { isOnline: false });
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('student_online', { studentId: finalStudentId, isOnline: false });
+      }
+    }
+    res.status(200).send("OK");
+  } catch (err) {
+     console.error("Force offline error:", err);
+     res.status(500).send();
+  }
+};

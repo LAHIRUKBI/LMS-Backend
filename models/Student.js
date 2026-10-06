@@ -24,6 +24,7 @@ const studentSchema = new mongoose.Schema({
   guardianRelation: { type: String, default: "" },
   guardianPhone: { type: String, default: "" },
   isOnline: { type: Boolean, default: false },
+  lastActive: { type: Date, default: Date.now },
 
   isNewForSidebar: { type: Boolean, default: true },
   isNewForTable: { type: Boolean, default: true },
