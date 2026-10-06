@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 const { createClass, getTeacherClasses, deleteClass, getAllClassesForAdmin, requestClass, getStudentRequests, getAllClassRequests, updateRequestStatus , deleteClassRequest, adminUpdateClass,
-  updateTeacherClass } = require('../controllers/classController');
+  updateTeacherClass, approveAllClassRequestsForClass, blockAllClassRequestsForClass } = require('../controllers/classController');
 
 // Configure multer storage for Class_Cover_images
 const storage = multer.diskStorage({
@@ -35,6 +35,8 @@ router.post('/request', authMiddleware, requestClass);
 router.get('/student-requests', authMiddleware, getStudentRequests);
 router.get('/requests/all', authMiddleware, getAllClassRequests);
 router.put('/requests/status', authMiddleware, updateRequestStatus);
+router.put('/requests/approve-all', authMiddleware, approveAllClassRequestsForClass);
+router.put('/requests/block-all', authMiddleware, blockAllClassRequestsForClass);
 // The newly added route to completely remove (delete) students' class requests.
 router.delete('/requests/:id', authMiddleware, deleteClassRequest);
 router.put('/admin/update/:id', authMiddleware, upload.single('coverImage'), adminUpdateClass);

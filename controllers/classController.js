@@ -179,20 +179,21 @@ exports.getAllClassRequests = async (req, res) => {
   try {
     const FreeCardRequest = require('../models/freeCardRequests');
 
-    const requests = await ClassRequest.find()
+    let requests = await ClassRequest.find()
       .populate('studentId', 'name email profileImage grade school phone address')
       .populate('classId')
       .populate('teacherId', 'name subject');
 
-    const enrichedRequests = await Promise.all(requests.map(async (reqItem) => {
+    // ස්වයංක්‍රීය මාසික බ්ලොක් කිරීමේ ලොජික් එක ක්‍රියාත්මක කිරීම
+    const { requestsList } = await checkAndAutoBlockMonthlyRequests(requests);
+
+    const enrichedRequests = await Promise.all(requestsList.map(async (reqItem) => {
       let isFreeCard = false;
       if (reqItem.studentId && reqItem.classId) {
-        // Check: Has this student officially submitted a Free Card application (FreeCardRequest) for this specific class (classId)?
         const freeCardReq = await FreeCardRequest.findOne({ 
           studentId: reqItem.studentId._id, 
           selectedClasses: { $in: [reqItem.classId._id] } 
         });
-        
         if (freeCardReq) {
           isFreeCard = true;
         }
@@ -214,12 +215,17 @@ exports.getAllClassRequests = async (req, res) => {
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { requestId, status } = req.body; // status: 'Approved' හෝ 'Blocked'
-    const updated = await ClassRequest.findByIdAndUpdate(requestId, { status }, { new: true })
+    
+    let updateData = { status };
+    if (status === 'Approved') {
+      updateData.approvedAt = new Date(); // Approve කළ මොහොත සටහන් කර ගැනීම
+    }
+
+    const updated = await ClassRequest.findByIdAndUpdate(requestId, updateData, { new: true })
       .populate('classId');
 
     if (!updated) return res.status(404).json({ message: 'The request cannot be found.' });
 
-    // සිසුවාට Notification එකක් යැවීම
     const Notification = require('../models/Notification');
     await Notification.create({
       userId: updated.studentId,
@@ -230,7 +236,7 @@ exports.updateRequestStatus = async (req, res) => {
         : `Your request to join the class has been blocked by the admin.`
     });
 
-    res.json({ message: `Request status ${status} was changed to`, updated });
+    res.json({ message: `Request status changed to ${status}`, updated });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
@@ -349,6 +355,87 @@ exports.updateTeacherClass = async (req, res) => {
 
     await classItem.save();
     res.json({ message: 'Class successfully updated!', classData: classItem });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// නව එකතු කිරීම: පන්තියක ඇති සියලුම Pending / Requests එකවර Approve කිරීම සඳහා
+exports.approveAllClassRequestsForClass = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    const { classId } = req.body;
+
+    // එම පන්තියේ Pending හෝ Blocked වී ඇති සියලුම ඉල්ලීම් එකවර Approved කිරීම
+    await ClassRequest.updateMany(
+      { classId, status: { $ne: 'Approved' } },
+      { $set: { status: 'Approved', approvedAt: new Date() } }
+    );
+
+    res.json({ message: 'All students in this class have been successfully approved!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server Error');
+  }
+};
+
+// මාසික දින ගණන සහ ගෙවී ගිය දින ගණන ගණනය කර ස්වයංක්‍රීයව Block කිරීමේ ශ්‍රිතය
+const checkAndAutoBlockMonthlyRequests = async (requestsList) => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0 - 11
+
+  // මාසයේ මුල් දිනය (මධ්‍යම රාත්‍රී 12:00)
+  const startOfMonth = new Date(currentYear, currentMonth, 1);
+  // මාසයේ අවසාන දිනය
+  const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+
+  // මුලු දින ගණන (උදා: 30 හෝ 31)
+  const totalDaysInMonth = endOfMonth.getDate();
+  
+  // මාසයේ දැනට ගෙවී ගොස් ඇති දින ගණන (අද දවස ඇතුළුව)
+  const daysPassed = Math.min(now.getDate(), totalDaysInMonth);
+
+  let modified = false;
+
+  for (let req of requestsList) {
+    // Approve වී ඇති සිසුන් පමණක් පරීක්ෂා කිරීම
+    if (req.status === 'Approved' && req.approvedAt) {
+      const approvalDate = new Date(req.approvedAt);
+      
+      // සිසුවා Approve වූ දිනය මෙම මාසයට පෙර එකක් නම් හෝ, 
+      // වත්මන් මාසය ඉකුත් වී ඇත්නම්, එසේත් නැතිනම් මාසය අවසන් වී ඇත්නම් (අද දවස මාසයේ දින ගණන ඉක්මවා ගොස් නම්)
+      if (approvalDate < startOfMonth || now > endOfMonth) {
+        req.status = 'Blocked';
+        await req.save();
+        modified = true;
+      }
+    }
+  }
+
+  return { requestsList, totalDaysInMonth, daysPassed };
+};
+
+// පන්තියක සිටින සියලුම සිසුන් එකවර Block කිරීම සඳහා
+exports.blockAllClassRequestsForClass = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Permission denied.' });
+    }
+
+    const { classId } = req.body;
+
+    // එම පන්තියේ සිසුන් සියල්ලන්ගේ status එක Block කිරීම සහ approvedAt ඉවත් කිරීම
+    await ClassRequest.updateMany(
+      { classId },
+      { $set: { status: 'Blocked' } }
+    );
+
+    res.json({ message: 'All students in this class have been successfully blocked!' });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server Error');
