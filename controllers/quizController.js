@@ -323,10 +323,11 @@ exports.evaluateEssay = async (req, res) => {
           const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
           const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-          const cleanStudent = studentAns.replace(/[^a-z0-9]/g, '');
-          const cleanCorrect = correctAns.replace(/[^a-z0-9]/g, '');
+          // සිංහල හෝ ඉංග්‍රීසි අකුරු සඳහා හිස්තැන් පමණක් ඉවත් කර සංසන්දනය කිරීම
+          const cleanStudent = studentAns.replace(/\s+/g, '');
+          const cleanCorrect = correctAns.replace(/\s+/g, '');
 
-          if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(studentAns)) {
+          if (cleanStudent === cleanCorrect || cleanStudent.includes(cleanCorrect) || cleanCorrect.includes(cleanStudent)) {
             autoEvaluatedScore += q.marks || 5;
           }
         } 
@@ -445,7 +446,8 @@ exports.evaluateAllMCQQuizzes = async (req, res) => {
           const studentAns = String(studentAnswers[qId] || "").trim().toLowerCase();
           const correctAns = String(q.correctAnswer || "").trim().toLowerCase();
 
-          if (studentAns.replace(/[^a-z0-9]/g, '') === correctAns.replace(/[^a-z0-9]/g, '')) {
+          // සිංහල හෝ ඉංග්‍රීසි අකුරු සඳහා හිස්තැන් පමණක් ඉවත් කර සංසන්දනය කිරීම
+          if (studentAns.replace(/\s+/g, '') === correctAns.replace(/\s+/g, '')) {
             score += q.marks || 5;
           }
         }
@@ -462,6 +464,8 @@ exports.evaluateAllMCQQuizzes = async (req, res) => {
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
+
+
 
 exports.deleteQuizSubmission = async (req, res) => {
   try {
