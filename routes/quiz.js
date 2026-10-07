@@ -1,3 +1,4 @@
+// routes/quiz.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -18,34 +19,47 @@ const {
   getQuizSubmissions,
   evaluateEssay,
   checkQuizSubmission,
-  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot,evaluateAllMCQQuizzes,deleteQuizSubmission,sendSubmissionToStudent,getStudentQuizResults,sendAllSubmissionsToStudents
+  getNewQuizCount, clearQuizSidebarBadge, clearQuizCardDot, evaluateAllMCQQuizzes, deleteQuizSubmission, sendSubmissionToStudent, getStudentQuizResults, sendAllSubmissionsToStudents
 } = require('../controllers/quizController');
 
-// Automatically creating the 'Quize_images' folder if it does not exist.
+// 1. Quize_images ෆෝල්ඩරය
 const quizImgDir = path.join(__dirname, '../Quize_images');
 if (!fs.existsSync(quizImgDir)) {
   fs.mkdirSync(quizImgDir);
 }
 
-// Multer Storage Configuration
+// 2. Answer_sheet ෆෝල්ඩරය ස්වයංක්‍රීයව සෑදීම
+const answerSheetDir = path.join(__dirname, '../Answer_sheet');
+if (!fs.existsSync(answerSheetDir)) {
+  fs.mkdirSync(answerSheetDir);
+}
+
+// Answer_PDF ෆෝල්ඩරය ස්වයංක්‍රීයව සෑදීම
+const answerPdfDir = path.join(__dirname, '../Answer_PDF');
+if (!fs.existsSync(answerPdfDir)) {
+  fs.mkdirSync(answerPdfDir);
+}
+
+// Multer Storage Configuration for Quizzes & Answer Sheets
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'Quize_images/');
+    if (file.fieldname.startsWith('answerSheets_')) {
+      cb(null, 'Answer_sheet/');
+    } else {
+      cb(null, 'Quize_images/');
+    }
   },
   filename: function (req, file, cb) {
-    // Assigning a unique name to prevent the file name from changing.
     cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '-'));
   }
 });
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit per image
 });
 
-// `upload.any()` retrieves all images and data sent from the frontend at once.
 router.post('/quizzes', authMiddleware, upload.any(), createQuiz);
-
 router.get('/admin/quizzes', authMiddleware, getPendingQuizzes);
 router.patch('/admin/quizzes/:id/status', authMiddleware, updateQuizStatus);
 router.delete('/admin/quizzes/:id', authMiddleware, deleteQuizAdmin);
@@ -53,12 +67,10 @@ router.get('/my-quizzes', authMiddleware, getMyQuizzes);
 router.put('/:id/publish', authMiddleware, publishQuiz);
 router.delete('/:id', authMiddleware, deleteTeacherQuiz);
 
-// New route for providing class-related quizzes
 router.get('/class/:classId', authMiddleware, getQuizzesByClass);
 
-
-// Student Submission & Evaluation Routes
-router.post('/:id/submit', authMiddleware, submitQuiz);
+// Student Submission & Evaluation Routes (upload.any() භාවිතා කරමින් පිළිතුරු කොළ ෆයිල්ස් ලබාගැනීම)
+router.post('/:id/submit', authMiddleware, upload.any(), submitQuiz);
 router.get('/:id/submissions', authMiddleware, getQuizSubmissions);
 router.post('/evaluate-essay', authMiddleware, evaluateEssay);
 router.delete('/submission/:id', authMiddleware, deleteQuizSubmission);
