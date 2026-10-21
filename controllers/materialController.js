@@ -1,59 +1,92 @@
-const path = require('path');
-const fs = require('fs');
 const Material = require('../models/Material');
+const { cloudinary } = require('../config/cloudinary');
 
-// 1. File Upload API එක
+
+// Helper function to extract the Video ID from a YouTube URL
+const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const regExp = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  const match = url.trim().match(regExp);
+  return match ? match[1] : null;
+};
+
+
+
+
+// 1. Material Upload API (Video / PDF / Paper)
 const uploadMaterial = async (req, res) => {
   try {
-    if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'Permission denied. ගුරුවරුන්ට පමණක් Files Upload කළ හැක.' });
+    // 1. User authentication and role verification
+    if (!req.user || req.user.role !== 'teacher') {
+      return res.status(403).json({ message: 'Permission denied. Only teachers can enter data.' });
     }
+    const { title, type, subject, grade, description, youtubeUrl } = req.body;
 
-    const { title, type, subject, grade, description } = req.body;
+    let finalFileUrl = "";
+    let finalFilePublicId = "";
+    let extractedVideoId = "";
 
-    if (!req.files || !req.files['file']) {
-      return res.status(400).json({ message: 'කරුණාකර PDF File එකක් ඇතුළත් කරන්න.' });
-    }
-
-    const pdfFile = req.files['file'][0];
-    const fileUrl = `/uploads/${pdfFile.filename}`;
-
-    let coverImageUrl = "";
-    if (req.files['coverImage']) {
-      const coverFile = req.files['coverImage'][0];
-      
-      // 5MB ට වඩා වැඩිදැයි පරීක්ෂා කිරීම (Multer limit එකට අමතරව අතිරේක පරීක්ෂාවක්)
-      if (coverFile.size > 5 * 1024 * 1024) {
-        // උඩුගත වූ PDF එකද ඉවත් කිරීම
-        fs.unlinkSync(path.join(__dirname, '..', fileUrl));
-        fs.unlinkSync(coverFile.path);
-        return res.status(400).json({ message: 'Cover image size must be less than 5MB.' });
+    // A. If the material is of a video type (YouTube URL check)
+    if (type === 'video') {
+      if (!youtubeUrl) {
+        return res.status(400).json({ message: 'Please include a YouTube link.' });
       }
+      // Universal YouTube Regex
+      const regExp = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = youtubeUrl.trim().match(regExp);
+      extractedVideoId = match ? match[1] : null;
 
-      coverImageUrl = `/PDF_covers/${coverFile.filename}`;
+      if (!extractedVideoId) {
+        return res.status(400).json({ message: 'Please provide a valid YouTube link.' });
+      }
+      finalFileUrl = youtubeUrl.trim();
+    } 
+    // B. If the material is in PDF or paper format (Cloudinary files check)
+    else if (type === 'pdf' || type === 'paper') {
+      if (!req.files || !req.files['file'] || req.files['file'].length === 0) {
+        return res.status(400).json({ message: 'Please upload a PDF file.' });
+      }
+      const pdfFile = req.files['file'][0];
+      finalFileUrl = pdfFile.path;          // Cloudinary URL
+      finalFilePublicId = pdfFile.filename; // Cloudinary Public ID
+    } else {
+      return res.status(400).json({ message: 'Select a valid Material Type.' });
     }
-
+    // If there is a cover image (Cloudinary Image)
+    let coverImageData = { url: "", publicId: "" };
+    if (req.files && req.files['coverImage'] && req.files['coverImage'].length > 0) {
+      const coverFile = req.files['coverImage'][0];
+      coverImageData = {
+        url: coverFile.path,
+        publicId: coverFile.filename
+      };
+    }
+    // Saving to the database
     const newMaterial = new Material({
       title,
       type,
       subject,
       grade,
-      description,
-      fileUrl,
-      coverImage: coverImageUrl,
-      teacherId: req.user.id
+      description: description || "",
+      fileUrl: finalFileUrl,
+      filePublicId: finalFilePublicId,
+      youtubeVideoId: extractedVideoId,
+      coverImage: coverImageData,
+      teacherId: req.user.id || req.user._id
     });
 
     await newMaterial.save();
-    res.status(201).json({ message: 'Document and cover image uploaded successfully!', material: newMaterial });
+    return res.status(201).json({ message: 'The material was successfully added!', material: newMaterial });
 
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error("Upload Material Error:", err);
+    return res.status(500).json({ message: err.message || 'Server Error' });
   }
 };
 
-// 2. තමන් Upload කළ පාඩම් බලාගැනීමේ API එක
+
+
+// 2. API for viewing the lessons one has uploaded
 const getMyMaterials = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -68,35 +101,54 @@ const getMyMaterials = async (req, res) => {
   }
 };
 
-// 3. Upload කළ පාඩමක් ඉවත් කිරීමේ (Delete) API එක
+
+
+// 3. API for Deleting an Uploaded Lesson (Teacher)
 const deleteMyMaterial = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
-      return res.status(403).json({ message: 'Permission denied.' });
+      return res.status(403).json({ message: 'Permission denied. You do not have permission.' });
     }
-
     const material = await Material.findById(req.params.id);
     if (!material) {
-      return res.status(404).json({ message: 'මෙම පාඩම සොයාගත නොහැක.' });
+      return res.status(404).json({ message: 'This lesson cannot be found.' });
     }
-
     if (material.teacherId.toString() !== req.user.id) {
-      return res.status(403).json({ message: 'Permission denied. ඔබට ඉවත් කළ හැක්කේ ඔබගේ පාඩම් පමණි.' });
+      return res.status(403).json({ message: 'Permission denied. You can only remove your own lessons.' });
+    }
+    // 1. Deleting the cover image from Cloudinary (Default: image)
+    if (material.coverImage && material.coverImage.publicId) {
+      await cloudinary.uploader.destroy(material.coverImage.publicId, { resource_type: 'image' });
+    }
+    // 2. Deleting the PDF file from Cloudinary
+    if (material.filePublicId) {
+      // Ensuring that the PDF is deleted in both cases—whether it exists as an 'image' or as 'raw' data:
+      try {
+        // Attempting to delete it as an 'image' resource type first
+        const result = await cloudinary.uploader.destroy(material.filePublicId, { resource_type: 'image' });
+        
+        // Deleting as a 'raw' resource type if not found as an 'Image'
+        if (result.result !== 'ok') {
+          await cloudinary.uploader.destroy(material.filePublicId, { resource_type: 'raw' });
+        }
+      } catch (err) {
+        // Fallback: Deleting as raw
+        await cloudinary.uploader.destroy(material.filePublicId, { resource_type: 'raw' });
+      }
     }
 
-    const filePath = path.join(__dirname, '..', material.fileUrl);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
+    // 3. Removing a record from the database
     await Material.findByIdAndDelete(req.params.id);
-    res.json({ message: 'පාඩම සාර්ථකව ඉවත් කරන ලදී.' });
+
+    return res.json({ message: 'The lesson and relevant files were successfully removed from Cloudinary.' });
 
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+    console.error("Delete Error:", err.message);
+    return res.status(500).json({ message: 'Server Error', error: err.message });
   }
 };
+
+
 
 // 4. Publish a material to selected classes or as Free (Teacher Only)
 const publishMaterial = async (req, res) => {
@@ -105,7 +157,7 @@ const publishMaterial = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Only teachers can publish.' });
     }
 
-    const { classIds, isFree } = req.body; // classIds array එක සහ isFree boolean අගය ලබා ගැනීම
+    const { classIds, isFree } = req.body;
     const material = await Material.findById(req.params.id);
     if (!material) return res.status(404).json({ message: 'Material not found.' });
 
@@ -117,7 +169,6 @@ const publishMaterial = async (req, res) => {
       return res.status(400).json({ message: 'Only approved materials can be published.' });
     }
 
-    // Free කර ඇත්නම් හෝ classIds ලබා දී ඇත්නම් publish කිරීම
     const hasClasses = classIds && Array.isArray(classIds) && classIds.length > 0;
     
     if (hasClasses || isFree) {
@@ -131,7 +182,6 @@ const publishMaterial = async (req, res) => {
     }
 
     await material.save();
-    // Student web application එකට පෙන්වීම සඳහා populate කර යැවීම
     await material.populate('classIds', 'grade medium mode day startTime endTime');
 
     res.json({ message: 'Material published successfully!', material });
@@ -141,7 +191,9 @@ const publishMaterial = async (req, res) => {
   }
 };
 
-// 5. Admin ට සියලුම පාඩම් ලබා ගැනීම
+
+
+// 5. Accessing all lessons for the Admin
 const getAllMaterialsAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -159,7 +211,9 @@ const getAllMaterialsAdmin = async (req, res) => {
   }
 };
 
-// 6. Admin ට පාඩමක Status එක (Approve/Reject) වෙනස් කිරීම
+
+
+// 6. Changing the status (Approve/Reject) of a lesson by the Admin
 const updateMaterialStatus = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -174,34 +228,40 @@ const updateMaterialStatus = async (req, res) => {
       { new: true }
     );
 
-    if (!updatedMaterial) return res.status(404).json({ message: 'පාඩම සොයාගත නොහැක.' });
+    if (!updatedMaterial) return res.status(404).json({ message: 'The lesson cannot be found.' });
 
-    res.json({ message: `පාඩම සාර්ථකව ${status} කරන ලදී.`, material: updatedMaterial });
+    res.json({ message: `Lesson successfully ${status}.`, material: updatedMaterial });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 };
 
-// 7. Admin විසින් පාඩමක් මකා දැමීමේ API එක
+
+
+// 7. Admin deletes a lesson API
 const deleteMaterialAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Permission denied. Admin වරුන්ට පමණි.' });
+      return res.status(403).json({ message: 'Permission denied. For admins only.' });
     }
 
     const material = await Material.findById(req.params.id);
     if (!material) {
-      return res.status(404).json({ message: 'මෙම පාඩම සොයාගත නොහැක.' });
+      return res.status(404).json({ message: 'This lesson cannot be found.' });
     }
 
-    const filePath = path.join(__dirname, '..', material.fileUrl);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // 1. Removing the PDF from Cloudinary
+    if (material.filePublicId) {
+      await cloudinary.uploader.destroy(material.filePublicId, { resource_type: 'raw' });
+    }
+    // 2. Removing the cover image from Cloudinary
+    if (material.coverImage && material.coverImage.publicId) {
+      await cloudinary.uploader.destroy(material.coverImage.publicId);
     }
 
     await Material.findByIdAndDelete(req.params.id);
-    res.json({ message: 'පාඩම Admin විසින් සාර්ථකව ඉවත් කරන ලදී.' });
+    res.json({ message: 'The lesson was successfully removed by the Admin.' });
 
   } catch (err) {
     console.error(err.message);
@@ -209,11 +269,12 @@ const deleteMaterialAdmin = async (req, res) => {
   }
 };
 
-// 8. පන්තියකට අදාළව Publish කර ඇති materials ලබා ගැනීම
+
+
+// 8. Accessing materials published for a class
 const getMaterialsByClass = async (req, res) => {
   try {
     const classId = req.params.classId;
-    // classIds අඩංගු සහ status approved වූ materials ලබා ගැනීම
     const materials = await Material.find({ 
       classIds: classId, 
       isPublished: true, 
@@ -227,16 +288,17 @@ const getMaterialsByClass = async (req, res) => {
   }
 };
 
-// 9. සිසුන්ට අනුමත වූ (Approved) සියලුම පාඩම් ලබා දීම (Student API)
+
+
+// 9. Providing all approved lessons to students
 const getStudentMaterials = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
       return res.status(403).json({ message: 'Permission denied.' });
     }
     
-    // status එක 'approved' වන ඒවා පමණක් ලබාගැනීම
     const materials = await Material.find({ status: 'approved' })
-      .populate('teacherId', 'name subject') // ගුරුවරයාගේ නම ලබා ගැනීම
+      .populate('teacherId', 'name subject')
       .sort({ createdAt: -1 });
       
     res.json(materials);
@@ -246,7 +308,9 @@ const getStudentMaterials = async (req, res) => {
   }
 };
 
-// 10. get free materials
+
+
+// 10. Get free materials
 const getFreeMaterialsForPublic = async (req, res) => {
   try {
     const materials = await Material.find({ isFree: true, status: 'approved' })
@@ -259,9 +323,9 @@ const getFreeMaterialsForPublic = async (req, res) => {
   }
 };
 
+
 // --- New Material Tracking Functions ---
 
-// 1. Obtaining the quantity of new materials for the sidebar
 const getNewMaterialCount = async (req, res) => {
   try {
     const count = await Material.countDocuments({ isNewForSidebar: true });
@@ -272,7 +336,6 @@ const getNewMaterialCount = async (req, res) => {
   }
 };
 
-// 2. Removing the number when the sidebar is clicked 
 const clearMaterialSidebarBadge = async (req, res) => {
   try {
     await Material.updateMany({ isNewForSidebar: true }, { isNewForSidebar: false });
@@ -283,7 +346,8 @@ const clearMaterialSidebarBadge = async (req, res) => {
   }
 };
 
-// 3. Removing the dot from the card
+
+
 const clearMaterialCardDot = async (req, res) => {
   try {
     await Material.findByIdAndUpdate(req.params.id, { isNewForTable: false });
@@ -293,6 +357,9 @@ const clearMaterialCardDot = async (req, res) => {
     res.status(500).send('Server Error');
   }
 };
+
+
+
 
 module.exports = {
   uploadMaterial,
