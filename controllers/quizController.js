@@ -5,8 +5,9 @@ const Class = require('../models/Class');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const { cloudinary } = require('../config/cloudinary');
 
-// The teacher prepares a quiz (with images) and sends it to the admin.
+// ගුරුවරයා ප්‍රශ්න පත්‍රයක් සාදා Cloudinary images සමඟ Admin වෙත යැවීම
 exports.createQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -16,24 +17,24 @@ exports.createQuiz = async (req, res) => {
     const { title, description, duration } = req.body;
     let questions = JSON.parse(req.body.questions || '[]');
 
-    // Checking the images uploaded via `req.files` and providing the path for the relevant question.
+    // Cloudinary හරහා upload වූ Images (questionImage_0, questionImage_1 ...) ප්‍රශ්න වලට assign කිරීම
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
         const indexParts = file.fieldname.split('_');
         if (indexParts.length === 2) {
           const qIndex = parseInt(indexParts[1], 10);
           if (questions[qIndex]) {
-            questions[qIndex].imageUrl = `/Quize_images/${file.filename}`;
+            questions[qIndex].imageUrl = file.path;          // Cloudinary Secure HTTPS URL
+            questions[qIndex].imagePublicId = file.filename;  // Cloudinary Public ID
           }
         }
       });
     }
 
-    // දත්ත වල ප්‍රශ්න වර්ග (mcq, single, short, essay) සහ subQuestions නිවැරදිව සකස් කිරීම
+    // දත්ත වල ප්‍රශ්න වර්ග සහ subQuestions නිවැරදිව සකස් කිරීම
     const formattedQuestions = questions.map((q) => {
       let totalMarks = q.marks || 5;
-      
-      // Essay ප්‍රශ්න සඳහා අනු ප්‍රශ්න තිබේ නම්, ඒවායේ ලකුණු එකතුව ප්‍රශ්නයේ සම්පූර්ණ ලකුණු ලෙස ගැනීම
+
       if (q.type === 'essay' && q.subQuestions && q.subQuestions.length > 0) {
         totalMarks = q.subQuestions.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
       }
@@ -42,8 +43,9 @@ exports.createQuiz = async (req, res) => {
         type: q.type,
         questionText: q.questionText,
         imageUrl: q.imageUrl || '',
+        imagePublicId: q.imagePublicId || '',
         options: q.options || [],
-        correctAnswer: q.correctAnswer || '', // MCQ සඳහා Array එකක් හෝ වෙනත් ඒවා සඳහා String එකක් විය හැක
+        correctAnswer: q.correctAnswer || '',
         marks: totalMarks,
         subQuestions: q.subQuestions || []
       };
@@ -98,10 +100,23 @@ exports.updateQuizStatus = async (req, res) => {
   }
 };
 
+// Admin විසින් Quiz එකක් Delete කිරීම (Cloudinary Images ද සමඟ)
 exports.deleteQuizAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    const quiz = await Quiz.findById(req.params.id);
+    if (quiz && quiz.questions) {
+      for (const q of quiz.questions) {
+        if (q.imagePublicId) {
+          try {
+            await cloudinary.uploader.destroy(q.imagePublicId);
+          } catch (delErr) {
+            console.error("Cloudinary quiz image delete error:", delErr);
+          }
+        }
+      }
     }
     await Quiz.findByIdAndDelete(req.params.id);
     res.status(200).json({ success: true, message: 'The quiz was deleted.' });
@@ -127,7 +142,7 @@ exports.publishQuiz = async (req, res) => {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
-    
+
     const { classIds, classSchedules } = req.body; 
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) return res.status(404).json({ message: 'Quiz not found.' });
@@ -175,10 +190,23 @@ exports.publishQuiz = async (req, res) => {
   }
 };
 
+// Teacher විසින් Quiz එකක් Delete කිරීම (Cloudinary Images ද සමඟ)
 exports.deleteTeacherQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+    const quiz = await Quiz.findById(req.params.id);
+    if (quiz && quiz.questions) {
+      for (const q of quiz.questions) {
+        if (q.imagePublicId) {
+          try {
+            await cloudinary.uploader.destroy(q.imagePublicId);
+          } catch (delErr) {
+            console.error("Cloudinary quiz image delete error:", delErr);
+          }
+        }
+      }
     }
     await Quiz.findByIdAndDelete(req.params.id);
     res.status(200).json({ success: true, message: 'The quiz was deleted.' });
@@ -254,7 +282,7 @@ exports.submitQuiz = async (req, res) => {
     const quizId = req.params.id;
     const studentId = req.user.id;
     let answers = {};
-    
+
     try {
       answers = req.body.answers ? JSON.parse(req.body.answers) : {};
     } catch (e) {
@@ -271,18 +299,17 @@ exports.submitQuiz = async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ success: false, message: 'The quiz cannot be found.' });
 
-    // පිළිතුරු කොළවල පින්තූර (Files) Process කිරීම
     let answerSheetsMap = {}; 
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
-        // fieldname format එක: answerSheets_[questionId] හෝ answerSheets_[questionId]_[subIdx]
         const prefix = 'answerSheets_';
         if (file.fieldname.startsWith(prefix)) {
           const qKey = file.fieldname.replace(prefix, '');
           if (!answerSheetsMap[qKey]) {
             answerSheetsMap[qKey] = [];
           }
-          answerSheetsMap[qKey].push(`/Answer_sheet/${file.filename}`);
+          // File path එක Cloudinary URL එකක් නම් කෙලින්ම ගනී
+          answerSheetsMap[qKey].push(file.path || `/Answer_sheet/${file.filename}`);
         }
       });
     }
@@ -296,7 +323,7 @@ exports.submitQuiz = async (req, res) => {
       quizId,
       studentId,
       answers,
-      answerSheets: answerSheetsMap, // පින්තූර පවා මෙහි සුරැකේ
+      answerSheets: answerSheetsMap,
       score: 0,
       maxScore,
       isEvaluated: false,
@@ -334,7 +361,7 @@ exports.evaluateEssay = async (req, res) => {
     if (teacherCorrections) {
       sub.teacherCorrections = teacherCorrections;
     }
-    
+
     const quiz = await Quiz.findById(sub.quizId._id || sub.quizId);
 
     if (overrideScore !== undefined && overrideScore !== null) {
@@ -389,7 +416,7 @@ exports.evaluateEssay = async (req, res) => {
 
     sub.isEvaluated = true;
 
-    // --- ප්‍රොෆේෂනල් සහ අලංකාර PDF වාර්තාව (Evaluated Report) ---
+    // Evaluated Report PDF Generation (Cloudinary or local)
     const pdfDir = path.join(__dirname, '../Answer_PDF');
     if (!fs.existsSync(pdfDir)) {
       fs.mkdirSync(pdfDir, { recursive: true });
@@ -408,14 +435,12 @@ exports.evaluateEssay = async (req, res) => {
       doc.font('SinhalaFont');
     }
 
-    // වර්ණ මාලාව (Professional Color Palette)
-    const primaryColor = '#4f46e5'; // Rich Indigo
-    const darkText = '#0f172a';     // Slate 900
-    const mutedText = '#475569';    // Slate 600
-    const cardBg = '#f8fafc';       // Slate 50
-    const accentBg = '#e0e7ff';     // Indigo 100
+    const primaryColor = '#4f46e5';
+    const darkText = '#0f172a';
+    const mutedText = '#475569';
+    const cardBg = '#f8fafc';
+    const accentBg = '#e0e7ff';
 
-    // 1. ඉහළ ආකර්ෂණීය ශීර්ෂ පාඨය (Header Banner)
     doc.rect(40, 35, 515, 55).fill(accentBg);
     doc.fillColor(primaryColor).fontSize(18).font('Helvetica-Bold').text('QUIZ EVALUATION REPORT', 55, 50);
     doc.fillColor('#4338ca').fontSize(10).font('Helvetica').text(`${new Date().toLocaleDateString()}`, 390, 52, { align: 'right' });
@@ -425,15 +450,14 @@ exports.evaluateEssay = async (req, res) => {
     // 2. සිසුවාගේ සහ ප්‍රශ්න පත්‍රයේ විස්තර (Summary Box)
     doc.rect(40, doc.y, 515, 65).fill('#ffffff').strokeColor('#cbd5e1').lineWidth(0.7).stroke();
     const boxTop = doc.y + 10;
-    
+
     doc.fillColor(darkText).fontSize(10);
     doc.font('Helvetica-Bold').text('Quiz Title     : ', 55, boxTop, { continued: true }).font('SinhalaFont').text(`${quiz.title}`);
     doc.font('SinhalaFont');
     doc.text('Student Name : ', 55, boxTop + 16, { continued: true }).font('Helvetica-Bold').text(`${sub.studentId?.name || 'N/A'}`);
     doc.font('SinhalaFont');
     doc.text('Student Email : ', 55, boxTop + 32, { continued: true }).font('Helvetica').text(`${sub.studentId?.email || 'N/A'}`);
-    
-    // ලකුණු පෙන්වන කොටස දකුණු පස
+
     doc.font('Helvetica-Bold').fontSize(12).fillColor('#16a34a').text(`Score: ${sub.score} / ${sub.maxScore}`, 380, boxTop + 16, { align: 'right' });
 
     doc.y = boxTop + 65;
@@ -451,7 +475,7 @@ exports.evaluateEssay = async (req, res) => {
       const qId = q._id.toString();
       const studentAnswers = sub.answers instanceof Map ? Object.fromEntries(sub.answers) : (sub.answers || {});
       const rawStudentAns = studentAnswers[qId];
-      
+
       let studentAnsStr = '';
       if (Array.isArray(rawStudentAns)) {
         studentAnsStr = rawStudentAns.join(', ');
@@ -516,37 +540,22 @@ exports.evaluateEssay = async (req, res) => {
       // ප්‍රශ්න කාඩ් එක සඳහා පසුබිමක් සහ වම්පසින් තීන්ත තීරුවක්
       doc.rect(40, startY, 515, 18).fill(cardBg);
       doc.rect(40, startY, 4, 18).fill(primaryColor);
-      
+
       doc.fillColor(darkText).fontSize(9).font('Helvetica-Bold').text(`Question ${idx + 1}`, 52, startY + 4, { continued: true });
       doc.font('Helvetica').text(`   |   Score: ${qEarnedMarks} / ${q.marks} Marks`, { continued: false });
-      
+
       doc.moveDown(1.2);
-      
-      // ගුරුවරයා දුන් ප්‍රශ්නය පැහැදිලිව, විශාල කර, තද කළු පාටින්
+
       doc.fillColor('#000000').font('SinhalaFont').fontSize(11);
       doc.text(`Q: ${q.questionText}`, { indent: 10, width: 490 });
       doc.moveDown(0.4);
 
-      // ප්‍රශ්නයට අදාළ පින්තූරය අනුප්‍රශ්න වලට උඩින්
-      if (q.imageUrl) {
-        const fullQImgPath = path.join(__dirname, '..', q.imageUrl);
-        if (fs.existsSync(fullQImgPath)) {
-          try {
-            doc.image(fullQImgPath, { fit: [150, 100], align: 'center' });
-            doc.moveDown(0.4);
-          } catch (imgErr) {
-            console.error("Error adding question image:", imgErr);
-          }
-        }
-      }
-
-      // අනු ප්‍රශ්න (Sub-questions) තිබේ නම් ඒවා පෙන්වීම
       if (hasSubQ) {
         doc.moveDown(0.2);
         q.subQuestions.forEach((sq, sqIdx) => {
           const subAns = (typeof rawStudentAns === 'object' && rawStudentAns !== null) ? (rawStudentAns[sqIdx] || 'No Answer') : '';
           const subMark = (savedEssayMarksObj[qId] && typeof savedEssayMarksObj[qId] === 'object') ? (savedEssayMarksObj[qId][sqIdx] || 0) : 0;
-          
+
           doc.font('SinhalaFont').fontSize(9.5).fillColor(darkText);
           doc.text(`   (${sqIdx + 1}) ${sq.subQuestionText} [Max: ${sq.marks} Marks]`, { indent: 15, width: 480 });
           doc.font('SinhalaFont').fillColor(mutedText);
@@ -575,29 +584,9 @@ exports.evaluateEssay = async (req, res) => {
         doc.moveDown(0.2);
       }
 
-      // ළමයා උඩුගත කළ පිළිතුරු රූප
-      if (answerSheetsObj[qId] && Array.isArray(answerSheetsObj[qId]) && answerSheetsObj[qId].length > 0) {
-        doc.moveDown(0.3);
-        doc.font('Helvetica-Bold').fillColor(primaryColor).fontSize(9).text(`Student Uploaded Answer Sheet(s):`, { indent: 10 });
-        doc.moveDown(0.3);
-
-        answerSheetsObj[qId].forEach((sheetUrl) => {
-          if (doc.y > 580) doc.addPage();
-          const fullSheetPath = path.join(__dirname, '..', sheetUrl);
-          if (fs.existsSync(fullSheetPath)) {
-            try {
-              doc.image(fullSheetPath, { fit: [220, 180], align: 'center' });
-              doc.moveDown(0.4);
-            } catch (sheetErr) {
-              console.error("Error adding answer sheet image:", sheetErr);
-            }
-          }
-        });
-      }
-
       doc.font('Helvetica-Bold').fillColor('#0284c7').fontSize(10).text(`Teacher Feedback   : `, { indent: 10, continued: true });
       doc.font('SinhalaFont').text(feedback);
-      
+
       doc.moveDown(1);
       
       // එක් කාඩ් එකක් අවසානයේ සිහින් රේඛාවක්
@@ -610,7 +599,7 @@ exports.evaluateEssay = async (req, res) => {
     sub.evaluatedPdfUrl = `/Answer_PDF/${pdfFileName}`;
     await sub.save();
 
-    res.json({ success: true, message: 'Professional PDF report successfully generated without status on short answers!', sub });
+    res.json({ success: true, message: 'Professional PDF report successfully generated!', sub });
   } catch (err) {
     console.error("Evaluate essay error:", err);
     res.status(500).json({ success: false, error: 'Server Error' });

@@ -1,14 +1,12 @@
 const bcrypt = require('bcryptjs');
 const Teacher = require('../models/Teacher');
-const path = require('path');
-const fs = require('fs');
+const { cloudinary } = require('../config/cloudinary');
 
 // 1. Obtaining the teacher's profile details
 const getTeacherProfile = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') return res.status(403).json({ message: 'Permission denied.' });
     
-    // Sending all details except the password.
     const teacher = await Teacher.findById(req.user.id).select('-password');
     res.json(teacher);
   } catch (err) {
@@ -29,7 +27,6 @@ const updateTeacherProfile = async (req, res) => {
       parsedQualifications = JSON.parse(req.body.qualifications);
     }
 
-    // Parsing social links
     let parsedSocialLinks = [];
     if (req.body.socialLinks) {
       parsedSocialLinks = JSON.parse(req.body.socialLinks);
@@ -43,24 +40,33 @@ const updateTeacherProfile = async (req, res) => {
     }
 
     const updateData = { 
-      teacherId, name, email, subject, phone, address, website, 
+      teacherId, 
+      name, 
+      email, 
+      subject, 
+      phone, 
+      address, 
+      website, 
       socialLinks: parsedSocialLinks,
       qualifications: parsedQualifications 
     };
 
+    // ඡායාරූපයක් Upload කර ඇත්නම්:
     if (req.file) {
       const currentTeacher = await Teacher.findById(req.user.id);
-      if (currentTeacher && currentTeacher.profilePhoto) {
-        const oldPhotoPath = path.join(__dirname, '../profile_photos', currentTeacher.profilePhoto);
-        if (fs.existsSync(oldPhotoPath)) {
-          try {
-            fs.unlinkSync(oldPhotoPath);
-          } catch (unlinkErr) {
-            console.error("Error deleting old profile photo:", unlinkErr);
-          }
+      
+      // 1. කලින් Cloudinary public_id එකක් තිබේ නම් Cloudinary වෙතින් පැරණි photo එක delete කිරීම
+      if (currentTeacher && currentTeacher.profilePhotoPublicId) {
+        try {
+          await cloudinary.uploader.destroy(currentTeacher.profilePhotoPublicId);
+        } catch (destroyErr) {
+          console.error("Cloudinary old photo delete error:", destroyErr);
         }
       }
-      updateData.profilePhoto = req.file.filename;
+
+      // 2. නව Cloudinary secure URL සහ Public ID එක save කිරීම
+      updateData.profilePhoto = req.file.path;          // Cloudinary HTTPS URL
+      updateData.profilePhotoPublicId = req.file.filename; // Cloudinary Public ID
     }
 
     if (password && password.trim() !== "") {

@@ -10,7 +10,8 @@ const questionSchema = new mongoose.Schema({
   // 'single' සහ 'essay' වර්ග අලුතින් එකතු කරන ලදී (පවතින mcq, short ඉවත් කර නැත)
   type: { type: String, enum: ['mcq', 'single', 'short', 'essay'], required: true },
   questionText: { type: String, required: true },
-  imageUrl: { type: String },
+  imageUrl: { type: String, default: "" },          // Cloudinary HTTPS URL හෝ පැරණි local path
+  imagePublicId: { type: String, default: "" },    // Cloudinary Public ID එක (Delete කිරීමට)
   options: [{ type: String }],
   // Multiple Choice සඳහා array එකක් හෝ Single/Short සඳහා string එකක් ලෙස ගබඩා කළ හැකි වන සේ Mixed භාවිතා කරන ලදී
   correctAnswer: { type: mongoose.Schema.Types.Mixed }, 

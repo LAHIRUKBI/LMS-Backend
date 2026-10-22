@@ -7,7 +7,8 @@ const studentSchema = new mongoose.Schema({
   address: { type: String },
   grade: { type: String },   
   school: { type: String },   
-  profileImage: { type: String, default: "" },
+  profileImage: { type: String, default: "" },          // Cloudinary HTTPS URL හෝ පැරණි local path
+  profileImagePublicId: { type: String, default: "" }, // Cloudinary එකෙන් delete කිරීමට අවශ්‍ය ID එක
   country: { type: String, default: "" },
   timeZone: { type: String, default: "" },
   medium: { type: String, default: "" },
