@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const Student = require('../models/Student');
 const fs = require('fs');
 const path = require('path');
+const { cloudinary } = require('../config/cloudinary');
 
 // 1. Student Registration (Email & Password)
 exports.registerStudent = async (req, res) => {
@@ -24,8 +25,7 @@ exports.registerStudent = async (req, res) => {
     });
 
     await student.save();
-    
-    // Sending a token for direct login
+
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -55,14 +55,12 @@ exports.loginStudent = async (req, res) => {
       return res.status(400).json({ message: 'Incorrect email address or password.' });
     }
 
-    // Updating `isOnline: true` in the database as soon as the child logs in.
     student.isOnline = true;
     await student.save();
 
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // Emitting a socket event
     const io = req.app.get('io');
     if (io) {
       io.emit('student_online', { studentId: student._id, isOnline: true });
@@ -96,14 +94,13 @@ exports.googleAuthStudent = async (req, res) => {
       });
       await student.save();
     }
-    // Updating `isOnline: true` in the database immediately upon logging in via Google.
+
     student.isOnline = true;
     await student.save();
 
     const payload = { user: { id: student._id, role: 'student' } };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // Emitting a socket event
     const io = req.app.get('io');
     if (io) {
       io.emit('student_online', { studentId: student._id, isOnline: true });
@@ -116,13 +113,11 @@ exports.googleAuthStudent = async (req, res) => {
   }
 };
 
-
-// 4. Student Profile Update (PUT)
+// 4. Student Profile Update (PUT) - Cloudinary Supported
 exports.updateStudentProfile = async (req, res) => {
   try {
     const userId = req.user.id; 
 
-    // First, retrieve the existing student's details (to delete the old photo).
     const existingStudent = await Student.findById(userId);
     if (!existingStudent) {
       return res.status(404).json({ message: 'This student cannot be found.' });
@@ -141,20 +136,31 @@ exports.updateStudentProfile = async (req, res) => {
       guardianName, guardianRelation, guardianPhone 
     };
 
-    // If a new picture has been uploaded
+    // අලුත් පින්තූරයක් Upload කර ඇත්නම්:
     if (req.file) {
-      // Deleting an old picture
-      if (existingStudent.profileImage) {
+      // 1. කලින් Cloudinary public_id එකක් තිබුණේ නම් එය Cloudinary වෙතින් Delete කිරීම
+      if (existingStudent.profileImagePublicId) {
+        try {
+          await cloudinary.uploader.destroy(existingStudent.profileImagePublicId);
+        } catch (destroyErr) {
+          console.error("Cloudinary old student photo delete error:", destroyErr);
+        }
+      } 
+      // පැරණි local file එකක් නම් එය disk එකෙන් delete කිරීම
+      else if (existingStudent.profileImage && !existingStudent.profileImage.startsWith('http')) {
         const oldImagePath = path.join(__dirname, '..', existingStudent.profileImage);
         if (fs.existsSync(oldImagePath)) {
           try {
-            fs.unlinkSync(oldImagePath); //The old photo is being demoed.
+            fs.unlinkSync(oldImagePath);
           } catch (err) {
-            console.error("Error deleting old profile image:", err);
+            console.error("Error deleting local profile image:", err);
           }
         }
       }
-      updateData.profileImage = `/Student_profile_photos/${req.file.filename}`;
+
+      // 2. Cloudinary Secure URL සහ Public ID එක save කිරීම
+      updateData.profileImage = req.file.path;               // Cloudinary HTTPS URL
+      updateData.profileImagePublicId = req.file.filename;   // Cloudinary Public ID
     }
 
     const updatedStudent = await Student.findByIdAndUpdate(
@@ -165,18 +171,18 @@ exports.updateStudentProfile = async (req, res) => {
 
     res.json(updatedStudent);
   } catch (err) {
-    console.error(err);
+    console.error("Update Student Profile Error:", err);
     res.status(500).send('Server Error');
   }
 };
 
-// 5. Student Logout (isOnline: false කිරීම සඳහා)
+// 5. Student Logout
 exports.logoutStudent = async (req, res) => {
   try {
     const studentId = req.body.studentId || (req.user ? req.user.id : null);
     if (studentId) {
       await Student.findByIdAndUpdate(studentId, { isOnline: false });
-      
+
       const io = req.app.get('io');
       if (io) {
         io.emit('student_online', { studentId, isOnline: false });
@@ -189,13 +195,11 @@ exports.logoutStudent = async (req, res) => {
   }
 };
 
-// To go offline immediately upon closing the tab
+// 6. Force Offline Student
 exports.forceOfflineStudent = async (req, res) => {
   try {
-    // Retrieving the studentId from req.body, req.query, or req.params
     const studentId = req.body?.studentId || req.query?.studentId || req.body;
-    
-    // To handle plain text received via sendBeacon
+
     let finalStudentId = studentId;
     if (typeof req.body === 'string' && req.body.startsWith('studentId=')) {
       finalStudentId = req.body.split('=')[1];
@@ -203,7 +207,7 @@ exports.forceOfflineStudent = async (req, res) => {
 
     if (finalStudentId) {
       await Student.findByIdAndUpdate(finalStudentId, { isOnline: false });
-      
+
       const io = req.app.get('io');
       if (io) {
         io.emit('student_online', { studentId: finalStudentId, isOnline: false });
@@ -211,7 +215,7 @@ exports.forceOfflineStudent = async (req, res) => {
     }
     res.status(200).send("OK");
   } catch (err) {
-     console.error("Force offline error:", err);
-     res.status(500).send();
+    console.error("Force offline error:", err);
+    res.status(500).send();
   }
 };

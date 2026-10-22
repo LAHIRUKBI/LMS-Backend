@@ -24,7 +24,8 @@ const teacherSchema = new mongoose.Schema({
   address: { type: String, default: "" },
   website: { type: String, default: "" },
   socialLinks: [socialLinkSchema], // The dynamic socialLinks array
-  profilePhoto: { type: String, default: "" }, // For the Unique ID / Filename to be saved
+  profilePhoto: { type: String, default: "" },          // Cloudinary Secure URL හෝ පැරණි local filename
+  profilePhotoPublicId: { type: String, default: "" },  // Cloudinary එකෙන් delete කිරීමට අවශ්‍ය ID එක
   qualifications: [qualificationSchema]        // Educational qualifications (as an array)
 }, { timestamps: true });
 
