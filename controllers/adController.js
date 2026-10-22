@@ -1,8 +1,26 @@
-const path = require('path');
-const fs = require('fs');
+// controllers/adController.js
 const Ad = require('../models/Ad');
 const Notification = require('../models/Notification');
 const Student = require('../models/Student');
+const { cloudinary } = require('../config/cloudinary');
+
+// Cloudinary URL එකෙන් Public ID ලබාගැනීම සඳහා වන Helper ශ්‍රිතය
+const getCloudinaryPublicId = (url) => {
+  if (!url || typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+  try {
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    const pathAfterUpload = parts.slice(uploadIndex + 1);
+    if (pathAfterUpload[0].startsWith('v') && !isNaN(pathAfterUpload[0].substring(1))) {
+      pathAfterUpload.shift();
+    }
+    const publicIdWithExt = pathAfterUpload.join('/');
+    return publicIdWithExt.replace(/\.[^/.]+$/, "");
+  } catch (e) {
+    return null;
+  }
+};
 
 exports.createAd = async (req, res) => {
   try {
@@ -11,7 +29,7 @@ exports.createAd = async (req, res) => {
     }
 
     const { headline, description, status, targetAudience, publishStartDate, publishEndDate, mediaType } = req.body;
-    
+
     let parsedLinks = [];
     if (req.body.links) {
       parsedLinks = JSON.parse(req.body.links);
@@ -22,10 +40,10 @@ exports.createAd = async (req, res) => {
 
     if (req.files) {
       if (req.files['images']) {
-        imageUrls = req.files['images'].map(file => `/advertisement/${file.filename}`);
+        imageUrls = req.files['images'].map(file => file.path); // Cloudinary Secure URL
       }
       if (req.files['video'] && req.files['video'].length > 0) {
-        videoUrl = `/advertisement/${req.files['video'][0].filename}`;
+        videoUrl = req.files['video'][0].path; // Cloudinary Secure URL
       }
     }
 
@@ -84,17 +102,16 @@ exports.createAd = async (req, res) => {
 exports.getActiveAds = async (req, res) => {
   try {
     const now = new Date();
-    
-    // Retrieving only the active ads that should be displayed at this moment.
+
     const ads = await Ad.find({ 
       status: 'active',
-      publishStartDate: { $lte: now }, // The start time must be earlier than the current moment (it must be in the past).
+      publishStartDate: { $lte: now },
       $or: [
-        { publishEndDate: null }, // If a deadline hasn't been given...
-        { publishEndDate: { $gt: now } } // Or if the deadline hasn't arrived yet
+        { publishEndDate: null },
+        { publishEndDate: { $gt: now } }
       ]
     }).sort({ createdAt: -1 });
-    
+
     res.status(200).json(ads);
   } catch (error) {
     res.status(500).json({ success: false, error: 'Data retrieval error.' });
@@ -124,25 +141,29 @@ exports.deleteAdAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ad not found.' });
     }
 
-    // Images delete කිරීම
+    // Cloudinary වෙතින් Images Delete කිරීම
     if (ad.images && Array.isArray(ad.images)) {
-      ad.images.forEach(imgUrl => {
-        if (typeof imgUrl === 'string' && imgUrl.trim() !== '') {
-          const cleanImgUrl = imgUrl.startsWith('/') ? imgUrl.substring(1) : imgUrl;
-          const filePath = path.join(__dirname, '..', cleanImgUrl);
-          if (fs.existsSync(filePath)) {
-            try { fs.unlinkSync(filePath); } catch (e) {}
+      for (const imgUrl of ad.images) {
+        const publicId = getCloudinaryPublicId(imgUrl);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+          } catch (e) {
+            console.error("Cloudinary ad image delete error:", e);
           }
         }
-      });
+      }
     }
 
-    // Deleting the video
-    if (ad.video && typeof ad.video === 'string' && ad.video.trim() !== '') {
-      const cleanVideoUrl = ad.video.startsWith('/') ? ad.video.substring(1) : ad.video;
-      const filePath = path.join(__dirname, '..', cleanVideoUrl);
-      if (fs.existsSync(filePath)) {
-        try { fs.unlinkSync(filePath); } catch (e) {}
+    // Cloudinary වෙතින් Video එක Delete කිරීම
+    if (ad.video) {
+      const vidPublicId = getCloudinaryPublicId(ad.video);
+      if (vidPublicId) {
+        try {
+          await cloudinary.uploader.destroy(vidPublicId, { resource_type: 'video' });
+        } catch (e) {
+          console.error("Cloudinary ad video delete error:", e);
+        }
       }
     }
 
@@ -161,7 +182,7 @@ exports.updateAdAdmin = async (req, res) => {
     }
 
     const { headline, description, status, links, mediaType, targetAudience, publishStartDate, publishEndDate, existingImages } = req.body;
-    
+
     let parsedLinks = [];
     if (links) {
       try {
@@ -185,21 +206,46 @@ exports.updateAdAdmin = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ad not found.' });
     }
 
-    // Retrieving the images left for deletion by the Admin from the initial image list.
+    // අයින් කරන ලද පැරණි images Cloudinary වෙතින් මකා දැමීම
+    if (ad.images && Array.isArray(ad.images)) {
+      const removedImages = ad.images.filter(img => !parsedExistingImages.includes(img));
+      for (const imgUrl of removedImages) {
+        const publicId = getCloudinaryPublicId(imgUrl);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+          } catch (e) {}
+        }
+      }
+    }
+
     let finalImages = parsedExistingImages;
 
-    // Adding new images if they have been uploaded.
+    // අලුතින් upload වූ images Cloudinary වෙතින් ලබා ගැනීම
     if (req.files && req.files['images'] && req.files['images'].length > 0) {
-      const newImageUrls = req.files['images'].map(file => `/advertisement/${file.filename}`);
+      const newImageUrls = req.files['images'].map(file => file.path);
       finalImages = [...finalImages, ...newImageUrls];
     }
 
     let finalVideo = ad.video;
-    // Replacing a newly uploaded video
+
+    // නව video එකක් upload කර ඇත්නම් පැරණි video එක Cloudinary වෙතින් delete කර නව video එක assign කිරීම
     if (req.files && req.files['video'] && req.files['video'].length > 0) {
-      finalVideo = `/advertisement/${req.files['video'][0].filename}`;
+      if (ad.video) {
+        const oldVidPubId = getCloudinaryPublicId(ad.video);
+        if (oldVidPubId) {
+          try { await cloudinary.uploader.destroy(oldVidPubId, { resource_type: 'video' }); } catch (e) {}
+        }
+      }
+      finalVideo = req.files['video'][0].path;
     } else if (req.body.hasVideo === 'false') {
-      finalVideo = null; // Video එක ඉවත් කර ඇත්නම්
+      if (ad.video) {
+        const oldVidPubId = getCloudinaryPublicId(ad.video);
+        if (oldVidPubId) {
+          try { await cloudinary.uploader.destroy(oldVidPubId, { resource_type: 'video' }); } catch (e) {}
+        }
+      }
+      finalVideo = null;
     }
 
     const updatedAd = await Ad.findByIdAndUpdate(

@@ -43,7 +43,37 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 4. If it is a PDF or a paper document
+    // 4. Advertisement Images (images)
+    if (file.fieldname === 'images') {
+      return {
+        folder: 'lms_ads_images',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `ad-img-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    // 5. Advertisement Video (video)
+    if (file.fieldname === 'video') {
+      return {
+        folder: 'lms_ads_videos',
+        resource_type: 'video',
+        allowed_formats: ['mp4', 'mov', 'avi', 'mkv', 'webm'],
+        public_id: `ad-vid-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    // 6. Class Cover Photo (coverImage)
+    if (file.fieldname === 'coverImage') {
+      return {
+        folder: 'lms_class_covers',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `class-cover-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    // 6. If it is a PDF or a paper document
     const isPdf = file.mimetype === 'application/pdf';
     if (isPdf) {
       return {
@@ -54,7 +84,7 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 5. If it’s the admin’s profile photo...
+    // 7. If it’s the admin’s profile photo...
     if (file.fieldname === 'profilePhoto' && req.baseUrl && req.baseUrl.includes('admin')) {
       return {
         folder: 'lms_admin_profiles',
@@ -64,7 +94,7 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 6. If it is a cover image or other images
+    // 8. If it is a cover image or other images
     return {
       folder: 'lms_covers',
       resource_type: 'image',
