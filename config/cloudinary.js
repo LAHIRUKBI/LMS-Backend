@@ -13,7 +13,7 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    // 1. Profile photo එකක් නම්
+    // 1. If it's a profile photo...
     if (file.fieldname === 'profilePhoto') {
       return {
         folder: 'lms_profiles',
@@ -23,7 +23,7 @@ const storage = new CloudinaryStorage({
       };
     }
  
-    // 2. ශිෂ්‍යයාගේ Profile Image එකක් නම්
+    // 2. If it is a profile image of the student
     if (file.fieldname === 'profileImage') {
       return {
         folder: 'lms_student_profiles',
@@ -33,7 +33,7 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 3. Quiz Question Images සඳහා (questionImage_0, questionImage_1 ...)
+    // 3. For Quiz Question Images (questionImage_0, questionImage_1 ...)
     if (file.fieldname.startsWith('questionImage_')) {
       return {
         folder: 'lms_quizzes',
@@ -43,7 +43,7 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 4. PDF / Paper එකක් නම්
+    // 4. If it is a PDF or a paper document
     const isPdf = file.mimetype === 'application/pdf';
     if (isPdf) {
       return {
@@ -54,7 +54,17 @@ const storage = new CloudinaryStorage({
       };
     }
 
-    // 5. Cover Image හෝ වෙනත් Images නම්
+    // 5. If it’s the admin’s profile photo...
+    if (file.fieldname === 'profilePhoto' && req.baseUrl && req.baseUrl.includes('admin')) {
+      return {
+        folder: 'lms_admin_profiles',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `admin-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    // 6. If it is a cover image or other images
     return {
       folder: 'lms_covers',
       resource_type: 'image',

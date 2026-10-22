@@ -127,7 +127,6 @@ const getAllAdmins = async (req, res) => {
 // 4. Delete Admin API
 const deleteAdmin = async (req, res) => {
   try {
-    // 1. පරිශීලකයා Admin කෙනෙක්ද සහ සුපර් ඇඩ්මින් (isDefault) කෙනෙක්ද යන්න පරීක්ෂා කිරීම
     if (req.user.role !== 'admin' || !req.user.isDefault) {
       return res.status(403).json({ message: 'මෙම ක්‍රියාව සිදු කිරීමට ඔබට අවසර නැත! ඇඩ්මින්වරුන් ඉවත් කළ හැක්කේ සුපර් ඇඩ්මින්ට පමණි.' });
     }
@@ -145,6 +144,15 @@ const deleteAdmin = async (req, res) => {
 
     if (adminToDelete._id.toString() === req.user.id) {
       return res.status(400).json({ message: 'You cannot delete your own account!' });
+    }
+
+    // Deleting the Admin's Cloudinary photo
+    if (adminToDelete.profilePhotoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(adminToDelete.profilePhotoPublicId);
+      } catch (delErr) {
+        console.error("Error deleting admin Cloudinary photo on delete:", delErr);
+      }
     }
 
     await Admin.findByIdAndDelete(adminIdToDelete);
@@ -230,7 +238,7 @@ const deleteAllStudents = async (req, res) => {
   }
 };
 
-// 1. Admin ගේ Profile එක ලබා ගැනීම
+// 1. Accessing the Admin's Profile
 const getAdminProfile = async (req, res) => {
   try {
     const admin = await Admin.findById(req.user.id).select('-password');
@@ -242,8 +250,7 @@ const getAdminProfile = async (req, res) => {
   }
 };
 
-// 2. Admin ගේ Profile එක යාවත්කාලීන කිරීම
-// 2. Admin ගේ Profile එක යාවත්කාලීන කිරීම
+// 2. Updating the Admin's profile
 const updateAdminProfile = async (req, res) => {
   try {
     const { name, email, phoneNumber } = req.body;
@@ -251,43 +258,50 @@ const updateAdminProfile = async (req, res) => {
 
     if (!admin) return res.status(404).json({ message: 'Admin account not found.' });
 
-    // තොරතුරු යාවත්කාලීන කිරීම
+    // Updating Information
     if (name) admin.name = name;
     if (email) admin.email = email;
-    if (phoneNumber) admin.phoneNumber = phoneNumber;
+    if (phoneNumber !== undefined) admin.phoneNumber = phoneNumber;
 
-    // අලුත් ඡායාරූපයක් Upload කර ඇත්නම්
+    // If a new photograph has been uploaded:
     if (req.file) {
-      // කලින් ඡායාරූපයක් තිබේ නම් එය Server එකෙන් මකා දැමීම (Delete old photo)
-      if (admin.profilePhoto) {
-        // admin.profilePhoto හි ඇත්තේ 'profile_photos/admin-123.jpg' වැනි අගයකි.
-        // අපි backend එකේ root folder එකට point කරලා delete කරන්න ඕනේ.
-        const oldPhotoPath = path.join(__dirname, '../', admin.profilePhoto);
-        
+      // 1. Deleting an existing Cloudinary public_id from Cloudinary
+      if (admin.profilePhotoPublicId) {
         try {
-            if (fs.existsSync(oldPhotoPath)) {
-                fs.unlinkSync(oldPhotoPath);
-                console.log(`Successfully deleted old photo: ${oldPhotoPath}`);
-            } else {
-                 console.log(`Old photo not found to delete: ${oldPhotoPath}`);
-            }
+          await cloudinary.uploader.destroy(admin.profilePhotoPublicId);
+          console.log(`Deleted old admin Cloudinary photo: ${admin.profilePhotoPublicId}`);
+        } catch (destroyErr) {
+          console.error("Cloudinary old admin photo delete error:", destroyErr);
+        }
+      } 
+      // Deleting an old local file from the disk
+      else if (admin.profilePhoto && !admin.profilePhoto.startsWith('http')) {
+        const oldPhotoPath = path.join(__dirname, '../', admin.profilePhoto);
+        try {
+          if (fs.existsSync(oldPhotoPath)) {
+            fs.unlinkSync(oldPhotoPath);
+            console.log(`Successfully deleted local old photo: ${oldPhotoPath}`);
+          }
         } catch (unlinkErr) {
-             console.error(`Error deleting old photo: ${oldPhotoPath}`, unlinkErr);
-             // පින්තූරය delete කරන්න බැරි උනත් අලුත් එක save කිරීම නතර කරන්න එපා.
+          console.error(`Error deleting local old photo: ${oldPhotoPath}`, unlinkErr);
         }
       }
-      // අලුත් ඡායාරූපයේ path එක save කිරීම
-      admin.profilePhoto = 'profile_photos/' + req.file.filename;
+
+      // 2. Saving the Cloudinary Secure URL and Public ID
+      admin.profilePhoto = req.file.path;               // Cloudinary HTTPS URL
+      admin.profilePhotoPublicId = req.file.filename;   // Cloudinary Public ID
     }
 
     await admin.save();
     res.json({ message: 'Profile updated successfully!', admin });
 
   } catch (err) {
-    console.error(err);
+    console.error("Update Admin Profile Error:", err);
     res.status(500).json({ message: 'Server Error during profile update' });
   }
 };
+
+
 
 // --- New Student Tracking Functions ---
 
