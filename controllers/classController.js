@@ -1,5 +1,25 @@
 const Class = require('../models/Class');
 const ClassRequest = require('../models/ClassRequest');
+const { cloudinary } = require('../config/cloudinary');
+
+// Helper to extract Cloudinary Public ID from URL
+const getCloudinaryPublicId = (url) => {
+  if (!url || typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+  try {
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    const pathAfterUpload = parts.slice(uploadIndex + 1);
+    if (pathAfterUpload[0].startsWith('v') && !isNaN(pathAfterUpload[0].substring(1))) {
+      pathAfterUpload.shift();
+    }
+    const publicIdWithExt = pathAfterUpload.join('/');
+    return publicIdWithExt.replace(/\.[^/.]+$/, "");
+  } catch (e) {
+    return null;
+  }
+};
+
 
 // 1. Creating a New Class (Create Class)
 exports.createClass = async (req, res) => {
@@ -25,10 +45,10 @@ exports.createClass = async (req, res) => {
       endTime, 
       description 
     } = req.body;
-    
+
     let coverImage = "";
     if (req.file) {
-      coverImage = `/Class_Cover_images/${req.file.filename}`;
+      coverImage = req.file.path;
     }
 
     const isProvideLater = provideLater === 'true' || provideLater === true;
@@ -103,12 +123,25 @@ exports.deleteClass = async (req, res) => {
     }
 
     const classId = req.params.id;
-    const deletedClass = await Class.findOneAndDelete({ _id: classId, teacherId: req.user.id });
+    const classItem = await Class.findOne({ _id: classId, teacherId: req.user.id });
 
-    if (!deletedClass) {
+    if (!classItem) {
       return res.status(404).json({ message: 'The class cannot be found, or you do not have permission to remove it.' });
     }
 
+    // Cloudinary cover photo එක ඉවත් කිරීම
+    if (classItem.coverImage) {
+      const publicId = getCloudinaryPublicId(classItem.coverImage);
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (delErr) {
+          console.error("Cloudinary cover delete error:", delErr);
+        }
+      }
+    }
+
+    await Class.findByIdAndDelete(classId);
     res.json({ message: 'The class was successfully removed.' });
   } catch (err) {
     console.error(err);
@@ -244,7 +277,6 @@ exports.updateRequestStatus = async (req, res) => {
 };
 
 // 9. Complete removal of the student's class request by the admin (Delete Student Request)
-// 9. Complete removal or canceling of the student's class request (Student can cancel their pending request, Admin can delete any)
 exports.deleteClassRequest = async (req, res) => {
   try {
     const requestId = req.params.id;
@@ -288,17 +320,24 @@ exports.adminUpdateClass = async (req, res) => {
 
     const classId = req.params.id;
     const { description } = req.body;
-    
-    let updateData = { description };
-    if (req.file) {
-      updateData.coverImage = `/Class_Cover_images/${req.file.filename}`;
-    }
 
-    const updatedClass = await Class.findByIdAndUpdate(classId, updateData, { new: true });
-    if (!updatedClass) {
+    const classItem = await Class.findById(classId);
+    if (!classItem) {
       return res.status(404).json({ message: 'Class not found.' });
     }
 
+    let updateData = { description };
+    if (req.file) {
+      if (classItem.coverImage) {
+        const oldPubId = getCloudinaryPublicId(classItem.coverImage);
+        if (oldPubId) {
+          try { await cloudinary.uploader.destroy(oldPubId); } catch (e) {}
+        }
+      }
+      updateData.coverImage = req.file.path;
+    }
+
+    const updatedClass = await Class.findByIdAndUpdate(classId, updateData, { new: true });
     res.json({ message: 'Class details successfully updated by admin!', classData: updatedClass });
   } catch (err) {
     console.error(err);
@@ -307,8 +346,8 @@ exports.adminUpdateClass = async (req, res) => {
 };
 
 
-// නව ක්‍රමවේදය: ගුරුවරයාට තමන්ගේ පන්තිය Update කිරීම සඳහා (Link එක දැමීමට, වෙනස් කිරීමට හෝ Close කිරීමට)
-// Teacher Update Class (Updated to support forcing immediate open on scheduled links)
+
+// Teacher Update Class
 exports.updateTeacherClass = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -335,8 +374,7 @@ exports.updateTeacherClass = async (req, res) => {
     if (onlineLink !== undefined) classItem.onlineLink = onlineLink;
     if (provideLater !== undefined) classItem.provideLater = provideLater;
     if (linkDisplayMode !== undefined) classItem.linkDisplayMode = linkDisplayMode;
-    
-    // જો immediate නම් dates null වේ, scheduled නම් නව කාලසීමාව ඇතුළත් වේ
+
     if (linkDisplayMode === 'immediate') {
       classItem.linkStartDateTime = null;
       classItem.linkEndDateTime = null;
@@ -349,8 +387,15 @@ exports.updateTeacherClass = async (req, res) => {
     if (instituteName !== undefined) classItem.instituteName = instituteName;
     if (instituteAddress !== undefined) classItem.instituteAddress = instituteAddress;
 
+    // නව Cover Image එකක් ආ විට පැරණි Cloudinary photo එක delete කර නව URL එක දැමීම
     if (req.file) {
-      classItem.coverImage = `/Class_Cover_images/${req.file.filename}`;
+      if (classItem.coverImage) {
+        const oldPubId = getCloudinaryPublicId(classItem.coverImage);
+        if (oldPubId) {
+          try { await cloudinary.uploader.destroy(oldPubId); } catch (e) {}
+        }
+      }
+      classItem.coverImage = req.file.path; // 👈 Cloudinary URL
     }
 
     await classItem.save();
