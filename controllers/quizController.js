@@ -6,8 +6,46 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const { cloudinary } = require('../config/cloudinary');
+const axios = require('axios');
 
-// ගුරුවරයා ප්‍රශ්න පත්‍රයක් සාදා Cloudinary images සමඟ Admin වෙත යැවීම
+// Helper function that gets the Image Buffer from Cloudinary URL or Local path
+const getImageBuffer = async (url) => {
+  if (!url) return null;
+  try {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const response = await axios.get(url, { responseType: 'arraybuffer' });
+      return Buffer.from(response.data);
+    } else {
+      const localPath = path.join(__dirname, '..', url);
+      if (fs.existsSync(localPath)) {
+        return localPath;
+      }
+    }
+  } catch (err) {
+    console.error("PDF Image download error:", err.message);
+  }
+  return null;
+};
+
+// Helper: Extracting the Public ID from a Cloudinary URL
+const getCloudinaryPublicId = (url) => {
+  if (!url || typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+  try {
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    const pathAfterUpload = parts.slice(uploadIndex + 1);
+    if (pathAfterUpload[0].startsWith('v') && !isNaN(pathAfterUpload[0].substring(1))) {
+      pathAfterUpload.shift();
+    }
+    const publicIdWithExt = pathAfterUpload.join('/');
+    return publicIdWithExt.replace(/\.[^/.]+$/, "");
+  } catch (e) {
+    return null;
+  }
+};
+
+// Teacher creating a question paper and sending it to Admin with Cloudinary images
 exports.createQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -17,7 +55,7 @@ exports.createQuiz = async (req, res) => {
     const { title, description, duration } = req.body;
     let questions = JSON.parse(req.body.questions || '[]');
 
-    // Cloudinary හරහා upload වූ Images (questionImage_0, questionImage_1 ...) ප්‍රශ්න වලට assign කිරීම
+    // Assigning images uploaded via Cloudinary (questionImage_0, questionImage_1, etc.) to questions
     if (req.files && req.files.length > 0) {
       req.files.forEach((file) => {
         const indexParts = file.fieldname.split('_');
@@ -31,7 +69,7 @@ exports.createQuiz = async (req, res) => {
       });
     }
 
-    // දත්ත වල ප්‍රශ්න වර්ග සහ subQuestions නිවැරදිව සකස් කිරීම
+    // Correctly structuring question types and sub-questions in the data
     const formattedQuestions = questions.map((q) => {
       let totalMarks = q.marks || 5;
 
@@ -100,7 +138,7 @@ exports.updateQuizStatus = async (req, res) => {
   }
 };
 
-// Admin විසින් Quiz එකක් Delete කිරීම (Cloudinary Images ද සමඟ)
+// Deleting a Quiz by an Admin (including Cloudinary images)
 exports.deleteQuizAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -190,7 +228,7 @@ exports.publishQuiz = async (req, res) => {
   }
 };
 
-// Teacher විසින් Quiz එකක් Delete කිරීම (Cloudinary Images ද සමඟ)
+// Deleting a Quiz (including Cloudinary images) by a Teacher
 exports.deleteTeacherQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
@@ -211,7 +249,7 @@ exports.deleteTeacherQuiz = async (req, res) => {
     await Quiz.findByIdAndDelete(req.params.id);
     res.status(200).json({ success: true, message: 'The quiz was deleted.' });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'දෝෂයක්.' });
+    res.status(500).json({ success: false, error: 'An error.' });
   }
 };
 
@@ -264,11 +302,11 @@ exports.getQuizById = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
-      return res.status(404).json({ success: false, message: 'Quiz එක සොයාගත නොහැක.' });
+      return res.status(404).json({ success: false, message: 'The quiz cannot be found.' });
     }
     res.status(200).json(quiz);
   } catch (error) {
-    console.error("Quiz ලබා ගැනීමේ දෝෂයක්:", error);
+    console.error("An error occurred while retrieving the quiz:", error);
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
@@ -308,7 +346,7 @@ exports.submitQuiz = async (req, res) => {
           if (!answerSheetsMap[qKey]) {
             answerSheetsMap[qKey] = [];
           }
-          // File path එක Cloudinary URL එකක් නම් කෙලින්ම ගනී
+          // If the file path is a Cloudinary URL, it is used directly.
           answerSheetsMap[qKey].push(file.path || `/Answer_sheet/${file.filename}`);
         }
       });
@@ -343,7 +381,8 @@ exports.getQuizSubmissions = async (req, res) => {
     const quizId = req.params.id;
     const submissions = await QuizSubmission.find({ quizId })
       .populate('studentId', 'name email profileImage')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(submissions);
   } catch (err) {
     res.status(500).send('Server Error');
@@ -416,19 +455,12 @@ exports.evaluateEssay = async (req, res) => {
 
     sub.isEvaluated = true;
 
-    // Evaluated Report PDF Generation (Cloudinary or local)
-    const pdfDir = path.join(__dirname, '../Answer_PDF');
-    if (!fs.existsSync(pdfDir)) {
-      fs.mkdirSync(pdfDir, { recursive: true });
-    }
-
-    const pdfFileName = `evaluated-${sub._id}-${Date.now()}.pdf`;
-    const pdfPath = path.join(pdfDir, pdfFileName);
-
+    // Creating a PDFKit document
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
-    doc.pipe(fs.createWriteStream(pdfPath));
+    const pdfBuffers = [];
+    doc.on('data', (chunk) => pdfBuffers.push(chunk));
 
-    // සිංහල ෆොන්ට් එක රෙජිස්ටර් කිරීම
+    // Sinhala font
     const fontPath = path.join(__dirname, '../fonts/NotoSansSinhala-Regular.ttf');
     if (fs.existsSync(fontPath)) {
       doc.registerFont('SinhalaFont', fontPath);
@@ -447,7 +479,7 @@ exports.evaluateEssay = async (req, res) => {
 
     doc.moveDown(3);
 
-    // 2. සිසුවාගේ සහ ප්‍රශ්න පත්‍රයේ විස්තර (Summary Box)
+    // Summary Box
     doc.rect(40, doc.y, 515, 65).fill('#ffffff').strokeColor('#cbd5e1').lineWidth(0.7).stroke();
     const boxTop = doc.y + 10;
 
@@ -466,8 +498,10 @@ exports.evaluateEssay = async (req, res) => {
     const answerSheetsObj = sub.answerSheets ? (sub.answerSheets instanceof Map ? Object.fromEntries(sub.answerSheets) : sub.answerSheets) : {};
     const savedEssayMarksObj = sub.essayMarks instanceof Map ? Object.fromEntries(sub.essayMarks) : (sub.essayMarks || {});
 
-    // 3. ප්‍රශ්න සහ පිළිතුරු කාඩ් ලෙස සකස් කිරීම
-    quiz.questions.forEach((q, idx) => {
+    // Rendering Questions and Answers
+    for (let idx = 0; idx < quiz.questions.length; idx++) {
+      const q = quiz.questions[idx];
+
       if (doc.y > 640) {
         doc.addPage();
       }
@@ -485,7 +519,6 @@ exports.evaluateEssay = async (req, res) => {
         studentAnsStr = String(rawStudentAns || 'None');
       }
 
-      // ගුරුවරයාගේ නිවැරදි පිළිතුර (Answer Key) සකස් කිරීම
       let correctAnswerStr = '';
       if (Array.isArray(q.correctAnswer)) {
         correctAnswerStr = q.correctAnswer.join(', ');
@@ -493,7 +526,6 @@ exports.evaluateEssay = async (req, res) => {
         correctAnswerStr = String(q.correctAnswer || '');
       }
 
-      // පිළිතුර නිවැරදිද නැද්ද යන්න පරීක්ෂා කිරීම (MCQ සඳහා පමණක් අදාළ වේ)
       let isCorrect = false;
       if (q.type === 'single') {
         const cleanStudent = String(studentAnsStr).trim().toLowerCase().replace(/\s+/g, '');
@@ -512,7 +544,6 @@ exports.evaluateEssay = async (req, res) => {
         isCorrect = true;
       }
 
-      // එක් එක් ප්‍රශ්නයට ළමයා ලබාගත් ලකුණු ගණනය කිරීම
       let qEarnedMarks = 0;
       const hasSubQ = q.subQuestions && Array.isArray(q.subQuestions) && q.subQuestions.length > 0;
 
@@ -537,7 +568,6 @@ exports.evaluateEssay = async (req, res) => {
 
       const startY = doc.y;
 
-      // ප්‍රශ්න කාඩ් එක සඳහා පසුබිමක් සහ වම්පසින් තීන්ත තීරුවක්
       doc.rect(40, startY, 515, 18).fill(cardBg);
       doc.rect(40, startY, 4, 18).fill(primaryColor);
 
@@ -545,10 +575,22 @@ exports.evaluateEssay = async (req, res) => {
       doc.font('Helvetica').text(`   |   Score: ${qEarnedMarks} / ${q.marks} Marks`, { continued: false });
 
       doc.moveDown(1.2);
-
       doc.fillColor('#000000').font('SinhalaFont').fontSize(11);
       doc.text(`Q: ${q.questionText}`, { indent: 10, width: 490 });
       doc.moveDown(0.4);
+
+      // Question Image
+      if (q.imageUrl) {
+        const qImgData = await getImageBuffer(q.imageUrl);
+        if (qImgData) {
+          try {
+            doc.image(qImgData, { fit: [150, 100], align: 'center' });
+            doc.moveDown(0.4);
+          } catch (imgErr) {
+            console.error("Error adding question image:", imgErr);
+          }
+        }
+      }
 
       if (hasSubQ) {
         doc.moveDown(0.2);
@@ -569,14 +611,12 @@ exports.evaluateEssay = async (req, res) => {
         doc.moveDown(0.2);
       }
 
-      // ගුරුවරයාගේ නිවැරදි පිළිතුර (Correct Answer Key) පෙන්වීම (වැරදි නම් පමණක්)
       if (correctAnswerStr && !isCorrect && !hasSubQ) {
         doc.font('Helvetica-Bold').fillColor('#16a34a').fontSize(10).text(`Correct Answer Key : `, { indent: 10, continued: true });
         doc.font('SinhalaFont').text(correctAnswerStr);
         doc.moveDown(0.2);
       }
 
-      // 👈 Short answers සඳහා Correct/Wrong ඉවත් කර, MCQ හෝ Single ප්‍රශ්න සඳහා පමණක් Correct/Wrong පෙන්වීම
       if ((q.type === 'mcq' || q.type === 'single') && !hasSubQ) {
         const statusText = isCorrect ? 'Correct' : 'Wrong';
         const statusColor = isCorrect ? '#16a34a' : '#dc2626';
@@ -584,22 +624,80 @@ exports.evaluateEssay = async (req, res) => {
         doc.moveDown(0.2);
       }
 
+      // Student Uploaded Answer Sheet Images
+      const qSheets = answerSheetsObj[qId] || answerSheetsObj[String(idx)] || [];
+      if (Array.isArray(qSheets) && qSheets.length > 0) {
+        doc.moveDown(0.3);
+        doc.font('Helvetica-Bold').fillColor(primaryColor).fontSize(9).text(`Student Uploaded Answer Sheet(s):`, { indent: 10 });
+        doc.moveDown(0.3);
+
+        for (const sheetUrl of qSheets) {
+          if (doc.y > 540) doc.addPage();
+          const sheetImgData = await getImageBuffer(sheetUrl);
+          if (sheetImgData) {
+            try {
+              doc.image(sheetImgData, { fit: [220, 180], align: 'center' });
+              doc.moveDown(0.4);
+            } catch (sheetErr) {
+              console.error("Error adding answer sheet image to PDF:", sheetErr);
+            }
+          }
+        }
+      }
+
       doc.font('Helvetica-Bold').fillColor('#0284c7').fontSize(10).text(`Teacher Feedback   : `, { indent: 10, continued: true });
       doc.font('SinhalaFont').text(feedback);
 
       doc.moveDown(1);
-      
-      // එක් කාඩ් එකක් අවසානයේ සිහින් රේඛාවක්
       doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
       doc.moveDown(0.8);
-    });
+    }
 
     doc.end();
 
-    sub.evaluatedPdfUrl = `/Answer_PDF/${pdfFileName}`;
-    await sub.save();
+    // Uploading the buffer to Cloudinary after the PDFKit stream has finished
+    await new Promise((resolve, reject) => {
+      doc.on('end', async () => {
+        try {
+          const finalPdfBuffer = Buffer.concat(pdfBuffers);
 
-    res.json({ success: true, message: 'Professional PDF report successfully generated!', sub });
+          if (sub.evaluatedPdfPublicId) {
+            try {
+              await cloudinary.uploader.destroy(sub.evaluatedPdfPublicId, { resource_type: 'raw' });
+            } catch (delOldErr) {
+              console.error("Error deleting previous evaluated PDF:", delOldErr);
+            }
+          }
+
+          // Sending the buffer to Cloudinary as a raw upload stream
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'lms_evaluated_reports',
+              resource_type: 'raw',
+              format: 'pdf',
+              public_id: `evaluated-${sub._id}-${Date.now()}`
+            },
+            async (error, result) => {
+              if (error) {
+                console.error("Cloudinary PDF upload error:", error);
+                return reject(error);
+              }
+              sub.evaluatedPdfUrl = result.secure_url; // Cloudinary Secure URL
+              sub.evaluatedPdfPublicId = result.public_id; // Cloudinary Public ID to delete
+              await sub.save();
+              resolve();
+            }
+          );
+
+          uploadStream.end(finalPdfBuffer);
+        } catch (streamErr) {
+          reject(streamErr);
+        }
+      });
+      doc.on('error', reject);
+    });
+
+    res.json({ success: true, message: 'Professional PDF report successfully generated & saved to Cloudinary!', sub });
   } catch (err) {
     console.error("Evaluate essay error:", err);
     res.status(500).json({ success: false, error: 'Server Error' });
@@ -705,9 +803,69 @@ exports.deleteQuizSubmission = async (req, res) => {
     if (req.user.role !== 'teacher') {
       return res.status(403).json({ success: false, message: 'Permission denied.' });
     }
+
+    const sub = await QuizSubmission.findById(req.params.id);
+    if (!sub) {
+      return res.status(404).json({ success: false, message: 'Submission not found.' });
+    }
+
+    // 1. Deleting all answer sheet images (Cloudinary or local) uploaded by the student
+    if (sub.answerSheets) {
+      const sheetsObj = sub.answerSheets instanceof Map ? Object.fromEntries(sub.answerSheets) : sub.answerSheets;
+      for (const key of Object.keys(sheetsObj)) {
+        const sheetList = sheetsObj[key];
+        if (Array.isArray(sheetList)) {
+          for (const sheetUrl of sheetList) {
+            if (sheetUrl.startsWith('http://') || sheetUrl.startsWith('https://')) {
+              const pubId = getCloudinaryPublicId(sheetUrl);
+              if (pubId) {
+                try {
+                  await cloudinary.uploader.destroy(pubId);
+                } catch (cErr) {
+                  console.error("Error deleting answer sheet image from Cloudinary:", cErr);
+                }
+              }
+            } else {
+              // If it is a local file (Fallback)
+              const localPath = path.join(__dirname, '..', sheetUrl);
+              if (fs.existsSync(localPath)) {
+                try { fs.unlinkSync(localPath); } catch (fErr) {}
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Deleting the evaluated PDF (Cloudinary or local)
+    if (sub.evaluatedPdfPublicId) {
+      try {
+        await cloudinary.uploader.destroy(sub.evaluatedPdfPublicId, { resource_type: 'raw' });
+      } catch (pdfCloudErr) {
+        console.error("Error deleting evaluated PDF from Cloudinary:", pdfCloudErr);
+      }
+    } else if (sub.evaluatedPdfUrl) {
+      // If it is a local file (if it was in the Answer_PDF folder)
+      if (!sub.evaluatedPdfUrl.startsWith('http')) {
+        const localPdfPath = path.join(__dirname, '..', sub.evaluatedPdfUrl);
+        if (fs.existsSync(localPdfPath)) {
+          try { fs.unlinkSync(localPdfPath); } catch (pdfErr) {}
+        }
+      } else {
+        const pubId = getCloudinaryPublicId(sub.evaluatedPdfUrl);
+        if (pubId) {
+          try {
+            await cloudinary.uploader.destroy(pubId, { resource_type: 'raw' });
+          } catch (delErr) {}
+        }
+      }
+    }
+
+    // 3. Deleting the submission document from the database
     await QuizSubmission.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: 'Student submission deleted successfully.' });
+    res.status(200).json({ success: true, message: 'Student submission and associated files successfully deleted.' });
   } catch (error) {
+    console.error("Error deleting submission:", error);
     res.status(500).json({ success: false, error: 'Server Error' });
   }
 };
