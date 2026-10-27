@@ -22,7 +22,14 @@ const classSchema = new mongoose.Schema({
   startTime: { type: String, required: true }, 
   endTime: { type: String, required: true },   
   coverImage: { type: String, default: "" }, 
-  description: { type: String, default: "" }  
+  description: { type: String, default: "" },
+  
+  isFree: { type: Boolean, default: false },
+  fee: { type: Number, default: 0 },
+  billingType: { type: String, enum: ['monthly', 'fixed_months'], default: 'monthly' },
+  durationMonths: { type: Number, default: 1 },
+  hasBatchLimit: { type: Boolean, default: false },
+  batchLimit: { type: Number, default: 0 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Class', classSchema);

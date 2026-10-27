@@ -25,6 +25,19 @@ const materialUploadFields = upload.fields([
   { name: 'coverImage', maxCount: 1 }   // Image
 ]);
 
+// Wrapper middleware to catch Multer & Cloudinary upload errors cleanly
+const handleUploadMiddleware = (req, res, next) => {
+  materialUploadFields(req, res, (err) => {
+    if (err) {
+      console.error("Multer / Cloudinary Upload Error:", err);
+      return res.status(400).json({ 
+        message: err.message || "File upload failed. The file may be too large or connection timed out." 
+      });
+    }
+    next();
+  });
+};
+
 // 1. Teacher Upload Route
 router.post('/upload', authMiddleware, materialUploadFields, uploadMaterial);
 

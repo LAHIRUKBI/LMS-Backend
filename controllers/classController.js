@@ -43,7 +43,14 @@ exports.createClass = async (req, res) => {
       day, 
       startTime, 
       endTime, 
-      description 
+      description,
+      // නව fields
+      isFree,
+      fee,
+      billingType,
+      durationMonths,
+      hasBatchLimit,
+      batchLimit
     } = req.body;
 
     let coverImage = "";
@@ -53,6 +60,8 @@ exports.createClass = async (req, res) => {
 
     const isProvideLater = provideLater === 'true' || provideLater === true;
     const displayMode = linkDisplayMode || 'scheduled';
+    const isFreeClass = isFree === 'true' || isFree === true;
+    const isBatchLimited = hasBatchLimit === 'true' || hasBatchLimit === true;
 
     const newClass = new Class({
       teacherId: req.user.id,
@@ -71,7 +80,15 @@ exports.createClass = async (req, res) => {
       startTime,
       endTime,
       coverImage,
-      description: description || ""
+      description: description || "",
+
+      // Fee & Limit values
+      isFree: isFreeClass,
+      fee: isFreeClass ? 0 : Number(fee) || 0,
+      billingType: isFreeClass ? 'monthly' : (billingType || 'monthly'),
+      durationMonths: (billingType === 'fixed_months' && !isFreeClass) ? Number(durationMonths) || 1 : 1,
+      hasBatchLimit: isBatchLimited,
+      batchLimit: isBatchLimited ? Number(batchLimit) || 0 : 0
     });
 
     await newClass.save();
@@ -174,6 +191,19 @@ exports.requestClass = async (req, res) => {
 
     const { classId, teacherId } = req.body;
     const studentId = req.user.id;
+
+    // පන්තිය සහ Batch Limit පරීක්ෂා කිරීම
+    const targetClass = await Class.findById(classId);
+    if (!targetClass) {
+      return res.status(404).json({ message: 'Class not found.' });
+    }
+
+    if (targetClass.hasBatchLimit && targetClass.batchLimit > 0) {
+      const approvedCount = await ClassRequest.countDocuments({ classId, status: 'Approved' });
+      if (approvedCount >= targetClass.batchLimit) {
+        return res.status(400).json({ message: 'Sorry, this class has reached its maximum student limit (Batch Full).' });
+      }
+    }
 
     // Checking whether a request has already been made
     const existing = await ClassRequest.findOne({ studentId, classId });
@@ -363,7 +393,13 @@ exports.updateTeacherClass = async (req, res) => {
       linkEndDateTime,
       description,
       instituteName,
-      instituteAddress
+      instituteAddress,
+      isFree,
+      fee,
+      billingType,
+      durationMonths,
+      hasBatchLimit,
+      batchLimit
     } = req.body;
 
     const classItem = await Class.findOne({ _id: classId, teacherId: req.user.id });
@@ -387,7 +423,29 @@ exports.updateTeacherClass = async (req, res) => {
     if (instituteName !== undefined) classItem.instituteName = instituteName;
     if (instituteAddress !== undefined) classItem.instituteAddress = instituteAddress;
 
-    // නව Cover Image එකක් ආ විට පැරණි Cloudinary photo එක delete කර නව URL එක දැමීම
+    if (isFree !== undefined) {
+      const isFreeVal = isFree === 'true' || isFree === true;
+      classItem.isFree = isFreeVal;
+      if (isFreeVal) {
+        classItem.fee = 0;
+      } else if (fee !== undefined) {
+        classItem.fee = Number(fee) || 0;
+      }
+    } else if (fee !== undefined) {
+      classItem.fee = Number(fee) || 0;
+    }
+
+    if (billingType !== undefined) classItem.billingType = billingType;
+    if (durationMonths !== undefined) classItem.durationMonths = Number(durationMonths) || 1;
+
+    if (hasBatchLimit !== undefined) {
+      const isLimited = hasBatchLimit === 'true' || hasBatchLimit === true;
+      classItem.hasBatchLimit = isLimited;
+      classItem.batchLimit = isLimited ? (Number(batchLimit) || 0) : 0;
+    } else if (batchLimit !== undefined) {
+      classItem.batchLimit = Number(batchLimit) || 0;
+    }
+
     if (req.file) {
       if (classItem.coverImage) {
         const oldPubId = getCloudinaryPublicId(classItem.coverImage);
@@ -395,7 +453,7 @@ exports.updateTeacherClass = async (req, res) => {
           try { await cloudinary.uploader.destroy(oldPubId); } catch (e) {}
         }
       }
-      classItem.coverImage = req.file.path; // 👈 Cloudinary URL
+      classItem.coverImage = req.file.path;
     }
 
     await classItem.save();
