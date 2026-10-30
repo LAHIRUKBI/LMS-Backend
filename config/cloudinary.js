@@ -73,6 +73,60 @@ const storage = new CloudinaryStorage({
       };
     }
 
+    if (file.fieldname === 'heroImagesFiles') {
+      return {
+        folder: 'lms_dashboard_hero',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `hero-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    if (file.fieldname === 'galleryImagesFiles') {
+      return {
+        folder: 'lms_dashboard_gallery',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `gallery-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    if (file.fieldname === 'badgeAvatarFiles') {
+      return {
+        folder: 'lms_dashboard_avatars',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `avatar-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    if (file.fieldname === 'testimonialBgFile') {
+      return {
+        folder: 'lms_dashboard_testimonials',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `testimonial-bg-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    if (file.fieldname.startsWith('testimonialFile_')) {
+      return {
+        folder: 'lms_dashboard_testimonials',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        public_id: `testimonial-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
+    if (file.fieldname.startsWith('featureIconFile_')) {
+      return {
+        folder: 'lms_dashboard_features',
+        resource_type: 'image',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'svg'],
+        public_id: `feature-${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9]/g, "_")}`
+      };
+    }
+
     // 6. If it is a PDF or a paper document
     const isPdf = file.mimetype === 'application/pdf';
     if (isPdf) {
