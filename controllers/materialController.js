@@ -1,5 +1,6 @@
 const Material = require('../models/Material');
 const { cloudinary } = require('../config/cloudinary');
+const Folder = require('../models/Folder');
 
 
 // Helper function to extract the Video ID from a YouTube URL
@@ -8,6 +9,20 @@ const extractYouTubeId = (url) => {
   const regExp = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   const match = url.trim().match(regExp);
   return match ? match[1] : null;
+};
+
+const getAncestorFolderIds = async (folderId, teacherId) => {
+  const ancestorIds = [];
+  let currentId = folderId;
+
+  while (currentId) {
+    const parentFolder = await Folder.findOne({ _id: currentId, teacherId }).select('_id parentFolderId');
+    if (!parentFolder) break;
+    ancestorIds.push(parentFolder._id);
+    currentId = parentFolder.parentFolderId; // ඊළඟ ඉහළ parent folder එක වෙත ගමන් කරයි
+  }
+
+  return ancestorIds;
 };
 
 
@@ -170,12 +185,44 @@ const publishMaterial = async (req, res) => {
     }
 
     const hasClasses = classIds && Array.isArray(classIds) && classIds.length > 0;
-    
-    if (hasClasses || isFree) {
+    const isPublishing = Boolean(hasClasses || isFree);
+
+    if (isPublishing) {
       material.classIds = hasClasses ? classIds : [];
       material.isPublished = true;
       material.isFree = !!isFree;
+
+      // --- Ancestor Folder Path Auto-Publish Logic ---
+      // මෙම Material එක Folder එකක් හෝ Sub-folder එකක් තුළ තිබේ නම්:
+      if (material.folderId) {
+        const ancestorFolderIds = await getAncestorFolderIds(material.folderId, req.user.id);
+
+        if (ancestorFolderIds.length > 0) {
+          // අදාළ Path එකේ ඇති folders සඳහා දැනටමත් පවතින classIds සහ isFree status එක ආරක්ෂා කරමින් නව classIds එක් කිරීම
+          const targetFolders = await Folder.find({ _id: { $in: ancestorFolderIds } });
+
+          for (const folder of targetFolders) {
+            folder.isPublished = true;
+            if (isFree) {
+              folder.isFree = true;
+            }
+
+            if (hasClasses) {
+              const currentClassIdStrings = (folder.classIds || []).map(id => id.toString());
+              classIds.forEach(cId => {
+                const strId = cId.toString();
+                if (!currentClassIdStrings.includes(strId)) {
+                  folder.classIds.push(cId);
+                }
+              });
+            }
+
+            await folder.save();
+          }
+        }
+      }
     } else {
+      // Unpublish කරන අවස්ථාව
       material.classIds = [];
       material.isPublished = false;
       material.isFree = false;
@@ -186,7 +233,7 @@ const publishMaterial = async (req, res) => {
 
     res.json({ message: 'Material published successfully!', material });
   } catch (err) {
-    console.error(err.message);
+    console.error("Publish Material Error:", err.message);
     res.status(500).send('Server Error');
   }
 };
