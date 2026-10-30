@@ -4,27 +4,24 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const DashboardSettings = require("../models/DashboardSettings");
+const { cloudinary, upload } = require("../config/cloudinary");
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, "../swp");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage: storage });
 
 // Helper function to delete old file from server storage
-const deleteOldFile = (filePath) => {
+const deleteOldFile = async (filePath) => {
   if (!filePath) return;
   try {
+    // If stored on Cloudinary
+    if (filePath.includes("cloudinary.com") || filePath.includes("res.cloudinary.com")) {
+      const urlParts = filePath.split('/');
+      const lastPart = urlParts.pop(); // filename with extension
+      const folderPart = urlParts.slice(urlParts.indexOf('upload') + 2).join('/');
+      const publicId = (folderPart ? folderPart + '/' : '') + lastPart.replace(/\.[^/.]+$/, "");
+      await cloudinary.uploader.destroy(publicId);
+      return;
+    }
+
+    // Fallback: If it was a local file stored previously
     let relativePath = filePath;
     if (filePath.startsWith("http")) {
       const urlObj = new URL(filePath);
@@ -62,13 +59,14 @@ router.put("/settings", upload.any(), async (req, res) => {
       let galleryFileIndex = 0;
       let badgeAvatarFileIndex = 0;
 
-      req.files.forEach((file) => {
-        const fileUrl = `/swp/${file.filename}`;
+      for (const file of req.files) {
+        // Cloudinary provides the full secure public URL in file.path
+        const fileUrl = file.path || file.secure_url;
         
         if (file.fieldname === 'heroImagesFiles') {
           if (dataToUpdate.heroImages && dataToUpdate.heroImages[heroFileIndex]) {
             if (existingSettings && existingSettings.heroImages && existingSettings.heroImages[heroFileIndex]) {
-              deleteOldFile(existingSettings.heroImages[heroFileIndex].image);
+              await deleteOldFile(existingSettings.heroImages[heroFileIndex].image);
             }
             dataToUpdate.heroImages[heroFileIndex].image = fileUrl;
           }
@@ -76,7 +74,7 @@ router.put("/settings", upload.any(), async (req, res) => {
         } else if (file.fieldname === 'galleryImagesFiles') {
           if (dataToUpdate.galleryItems && dataToUpdate.galleryItems[galleryFileIndex]) {
             if (existingSettings && existingSettings.galleryItems && existingSettings.galleryItems[galleryFileIndex]) {
-              deleteOldFile(existingSettings.galleryItems[galleryFileIndex].image);
+              await deleteOldFile(existingSettings.galleryItems[galleryFileIndex].image);
             }
             dataToUpdate.galleryItems[galleryFileIndex].image = fileUrl;
           }
@@ -84,21 +82,21 @@ router.put("/settings", upload.any(), async (req, res) => {
         } else if (file.fieldname === 'badgeAvatarFiles') {
           if (dataToUpdate.badgeAvatars && dataToUpdate.badgeAvatars[badgeAvatarFileIndex]) {
             if (existingSettings && existingSettings.badgeAvatars && existingSettings.badgeAvatars[badgeAvatarFileIndex]) {
-              deleteOldFile(existingSettings.badgeAvatars[badgeAvatarFileIndex].image);
+              await deleteOldFile(existingSettings.badgeAvatars[badgeAvatarFileIndex].image);
             }
             dataToUpdate.badgeAvatars[badgeAvatarFileIndex].image = fileUrl;
           }
           badgeAvatarFileIndex++;
         } else if (file.fieldname === 'testimonialBgFile') {
           if (existingSettings && existingSettings.testimonialBgImage) {
-            deleteOldFile(existingSettings.testimonialBgImage);
+            await deleteOldFile(existingSettings.testimonialBgImage);
           }
           dataToUpdate.testimonialBgImage = fileUrl;
         } else if (file.fieldname.startsWith('testimonialFile_')) {
           const index = parseInt(file.fieldname.split('_')[1], 10);
           if (dataToUpdate.testimonials && dataToUpdate.testimonials[index]) {
             if (existingSettings && existingSettings.testimonials && existingSettings.testimonials[index]) {
-              deleteOldFile(existingSettings.testimonials[index].image);
+              await deleteOldFile(existingSettings.testimonials[index].image);
             }
             dataToUpdate.testimonials[index].image = fileUrl;
           }
@@ -106,12 +104,12 @@ router.put("/settings", upload.any(), async (req, res) => {
           const index = parseInt(file.fieldname.split('_')[1], 10);
           if (dataToUpdate.featureItems && dataToUpdate.featureItems[index]) {
             if (existingSettings && existingSettings.featureItems && existingSettings.featureItems[index]) {
-              deleteOldFile(existingSettings.featureItems[index].iconImage);
+              await deleteOldFile(existingSettings.featureItems[index].iconImage);
             }
             dataToUpdate.featureItems[index].iconImage = fileUrl;
           }
         }
-      });
+      }
     }
 
     let settings = existingSettings;
