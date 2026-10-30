@@ -163,7 +163,55 @@ const deleteMyMaterial = async (req, res) => {
   }
 };
 
+// Ancestor folders වල published classes සහ isFree status එක නැවත නිවැරදිව ගණනය කරන helper function එක
+const reevaluateAncestorFolders = async (folderId, teacherId) => {
+  let currentId = folderId;
 
+  while (currentId) {
+    const folder = await Folder.findOne({ _id: currentId, teacherId });
+    if (!folder) break;
+
+    // 1. මෙම folder එක තුළ සෘජුව ඇති published materials
+    const directMaterials = await Material.find({
+      folderId: folder._id,
+      teacherId,
+      isPublished: true
+    }).select('classIds isFree');
+
+    // 2. මෙම folder එක තුළ සෘජුව ඇති published sub-folders
+    const directSubFolders = await Folder.find({
+      parentFolderId: folder._id,
+      teacherId,
+      isPublished: true
+    }).select('classIds isFree');
+
+    // සියලුම active classIds සහ isFree status එකතු කර ගැනීම
+    const activeClassIdSet = new Set();
+    let isAnyFree = false;
+
+    directMaterials.forEach(m => {
+      if (m.isFree) isAnyFree = true;
+      (m.classIds || []).forEach(cId => activeClassIdSet.add(cId.toString()));
+    });
+
+    directSubFolders.forEach(sf => {
+      if (sf.isFree) isAnyFree = true;
+      (sf.classIds || []).forEach(cId => activeClassIdSet.add(cId.toString()));
+    });
+
+    const newClassIds = Array.from(activeClassIdSet);
+    const shouldBePublished = newClassIds.length > 0 || isAnyFree;
+
+    folder.classIds = newClassIds;
+    folder.isFree = isAnyFree;
+    folder.isPublished = shouldBePublished;
+
+    await folder.save();
+
+    // ඉහළ parent folder එක වෙත ගමන් කරයි
+    currentId = folder.parentFolderId;
+  }
+};
 
 // 4. Publish a material to selected classes or as Free (Teacher Only)
 const publishMaterial = async (req, res) => {
@@ -192,13 +240,11 @@ const publishMaterial = async (req, res) => {
       material.isPublished = true;
       material.isFree = !!isFree;
 
-      // --- Ancestor Folder Path Auto-Publish Logic ---
-      // මෙම Material එක Folder එකක් හෝ Sub-folder එකක් තුළ තිබේ නම්:
+      // Ancestor Folder Path Auto-Publish
       if (material.folderId) {
         const ancestorFolderIds = await getAncestorFolderIds(material.folderId, req.user.id);
 
         if (ancestorFolderIds.length > 0) {
-          // අදාළ Path එකේ ඇති folders සඳහා දැනටමත් පවතින classIds සහ isFree status එක ආරක්ෂා කරමින් නව classIds එක් කිරීම
           const targetFolders = await Folder.find({ _id: { $in: ancestorFolderIds } });
 
           for (const folder of targetFolders) {
@@ -229,9 +275,15 @@ const publishMaterial = async (req, res) => {
     }
 
     await material.save();
+
+    // Material එක unpublish හෝ publish වූ පසු, ඊට ඉහළින් ඇති folders වල active status එක update කිරීම
+    if (material.folderId) {
+      await reevaluateAncestorFolders(material.folderId, req.user.id);
+    }
+
     await material.populate('classIds', 'grade medium mode day startTime endTime');
 
-    res.json({ message: 'Material published successfully!', material });
+    res.json({ message: 'Material publish status updated successfully!', material });
   } catch (err) {
     console.error("Publish Material Error:", err.message);
     res.status(500).send('Server Error');
