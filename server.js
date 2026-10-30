@@ -63,6 +63,7 @@ app.use('/api/ads', adRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', noticeRoutes);
 app.use('/api/faqs', faqRoutes);
+app.use('/api/folders', require('./routes/folderRoutes'));
 
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);

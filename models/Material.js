@@ -18,6 +18,7 @@ const materialSchema = new mongoose.Schema({
   grade: { type: String, required: true },
   description: { type: String, default: "" },
   teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
+  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   rejectReason: { type: String, default: "" },
   // Class associations and visibility
