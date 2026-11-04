@@ -884,6 +884,7 @@ exports.sendSubmissionToStudent = async (req, res) => {
     await Notification.create({
       userId: sub.studentId,
       recipientRole: 'student',
+      quizId: sub.quizId?._id || sub.quizId,
       title: '📝 Quiz Results Published!',
       message: `Your teacher has evaluated and published your results for the quiz: "${sub.quizId?.title || 'Quiz'}". Score: ${sub.score}/${sub.maxScore}`
     });
@@ -931,6 +932,7 @@ exports.sendAllSubmissionsToStudents = async (req, res) => {
       return Notification.create({
         userId: sub.studentId,
         recipientRole: 'student',
+        quizId: sub.quizId?._id || sub.quizId,
         title: '📝 Quiz Results Published!',
         message: `Your teacher has evaluated and published your results for the quiz: "${quizTitle}". Score: ${sub.score}/${sub.maxScore}`
       });
