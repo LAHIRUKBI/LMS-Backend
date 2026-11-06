@@ -175,6 +175,194 @@ exports.getMyQuizzes = async (req, res) => {
   }
 };
 
+// Updating a teacher's own quiz. Any change must be reviewed by Admin again.
+exports.updateTeacherQuiz = async (req, res) => {
+  const uploadedFiles = req.files || [];
+
+  const cleanupUploadedImages = async () => {
+    for (const file of uploadedFiles) {
+      if (file.filename) {
+        try {
+          await cloudinary.uploader.destroy(file.filename);
+        } catch (cleanupError) {
+          console.error("Cloudinary temporary quiz image cleanup error:", cleanupError);
+        }
+      }
+    }
+  };
+
+  try {
+    if (req.user.role !== 'teacher') {
+      await cleanupUploadedImages();
+      return res.status(403).json({ success: false, message: 'Permission denied.' });
+    }
+
+    const quiz = await Quiz.findOne({ _id: req.params.id, teacherId: req.user.id });
+    if (!quiz) {
+      await cleanupUploadedImages();
+      return res.status(404).json({ success: false, message: 'Quiz not found or you do not have permission to edit it.' });
+    }
+
+    // Existing student answers and evaluations refer to question sub-document IDs.
+    // Do not replace those questions after students have submitted this quiz.
+    const hasSubmissions = await QuizSubmission.exists({ quizId: quiz._id });
+    if (hasSubmissions) {
+      await cleanupUploadedImages();
+      return res.status(409).json({
+        success: false,
+        message: 'This quiz already has student submissions. It cannot be edited because doing so could affect saved answers and evaluation records.'
+      });
+    }
+
+    const title = String(req.body.title || '').trim();
+    const description = String(req.body.description || '');
+    const duration = Number(req.body.duration);
+
+    if (!title) {
+      await cleanupUploadedImages();
+      return res.status(400).json({ success: false, message: 'Please provide a quiz title.' });
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      await cleanupUploadedImages();
+      return res.status(400).json({ success: false, message: 'Please provide a valid quiz duration.' });
+    }
+
+    let questions;
+    try {
+      questions = JSON.parse(req.body.questions || '[]');
+    } catch (parseError) {
+      await cleanupUploadedImages();
+      return res.status(400).json({ success: false, message: 'Invalid quiz question data.' });
+    }
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      await cleanupUploadedImages();
+      return res.status(400).json({ success: false, message: 'A quiz must contain at least one question.' });
+    }
+
+    const uploadedImagesByIndex = new Map();
+    uploadedFiles.forEach((file) => {
+      const match = /^questionImage_(\d+)$/.exec(file.fieldname || '');
+      if (match) uploadedImagesByIndex.set(Number(match[1]), file);
+    });
+
+    const formattedQuestions = [];
+    for (let index = 0; index < questions.length; index += 1) {
+      const q = questions[index] || {};
+      const allowedTypes = ['mcq', 'single', 'short', 'essay'];
+
+      if (!allowedTypes.includes(q.type)) {
+        await cleanupUploadedImages();
+        return res.status(400).json({ success: false, message: `Question ${index + 1} has an invalid question type.` });
+      }
+      if (!String(q.questionText || '').trim()) {
+        await cleanupUploadedImages();
+        return res.status(400).json({ success: false, message: `Please enter the text for question ${index + 1}.` });
+      }
+
+      const existingQuestion = q._id ? quiz.questions.id(q._id) : null;
+      if (q._id && !existingQuestion) {
+        await cleanupUploadedImages();
+        return res.status(400).json({ success: false, message: `Question ${index + 1} does not belong to this quiz.` });
+      }
+
+      const uploadedImage = uploadedImagesByIndex.get(index);
+      let imageUrl = '';
+      let imagePublicId = '';
+
+      if (uploadedImage) {
+        imageUrl = uploadedImage.path || '';
+        imagePublicId = uploadedImage.filename || '';
+      } else if (existingQuestion && !q.removeImage) {
+        // Keep the stored image unless the teacher explicitly removes or replaces it.
+        imageUrl = existingQuestion.imageUrl || '';
+        imagePublicId = existingQuestion.imagePublicId || '';
+      }
+
+      const subQuestions = Array.isArray(q.subQuestions)
+        ? q.subQuestions.map((sq) => ({
+            subQuestionText: String(sq.subQuestionText || '').trim(),
+            marks: Number(sq.marks) || 0,
+          }))
+        : [];
+
+      if (q.type === 'essay' && subQuestions.some((sq) => !sq.subQuestionText)) {
+        await cleanupUploadedImages();
+        return res.status(400).json({ success: false, message: `Please complete all sub-questions in question ${index + 1}.` });
+      }
+
+      const questionMarks = q.type === 'essay' && subQuestions.length > 0
+        ? subQuestions.reduce((sum, sq) => sum + sq.marks, 0)
+        : (Number(q.marks) || 0);
+
+      formattedQuestions.push({
+        ...(existingQuestion ? { _id: existingQuestion._id } : {}),
+        type: q.type,
+        questionText: String(q.questionText).trim(),
+        imageUrl,
+        imagePublicId,
+        options: (q.type === 'mcq' || q.type === 'single') && Array.isArray(q.options) ? q.options : [],
+        correctAnswer: q.correctAnswer ?? '',
+        marks: questionMarks,
+        subQuestions: q.type === 'essay' ? subQuestions : [],
+      });
+    }
+
+    const retainedImageIds = new Set(
+      formattedQuestions.map((question) => question.imagePublicId).filter(Boolean)
+    );
+    const oldImageIds = quiz.questions.map((question) => question.imagePublicId).filter(Boolean);
+
+    quiz.title = title;
+    quiz.description = description;
+    quiz.duration = duration;
+    quiz.questions = formattedQuestions;
+
+    // Any edited quiz must pass the existing approval and publishing workflow again.
+    quiz.status = 'pending';
+    quiz.rejectReason = '';
+    quiz.isPublished = false;
+    // Keep the previously selected classes and schedules so they can be reused
+    // when the Admin approves this revised quiz.
+    quiz.isNewForSidebar = true;
+    quiz.isNewForTable = true;
+
+    await quiz.save();
+
+    // Delete images that were removed or replaced only after the updated quiz is saved.
+    for (const publicId of oldImageIds) {
+      if (!retainedImageIds.has(publicId)) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (deleteError) {
+          console.error("Cloudinary old quiz image delete error:", deleteError);
+        }
+      }
+    }
+
+    // Remove any uploaded file that was not attached to a question.
+    for (const file of uploadedFiles) {
+      if (file.filename && !retainedImageIds.has(file.filename)) {
+        try {
+          await cloudinary.uploader.destroy(file.filename);
+        } catch (cleanupError) {
+          console.error("Cloudinary unused quiz image cleanup error:", cleanupError);
+        }
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Quiz updated successfully and sent to Admin for approval. It must be approved and published again.',
+      quiz,
+    });
+  } catch (error) {
+    console.error('Error updating teacher quiz:', error);
+    await cleanupUploadedImages();
+    return res.status(500).json({ success: false, message: 'A server error occurred while updating the quiz.' });
+  }
+};
+
 exports.publishQuiz = async (req, res) => {
   try {
     if (req.user.role !== 'teacher') {
