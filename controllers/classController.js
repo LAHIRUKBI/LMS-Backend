@@ -245,6 +245,7 @@ exports.getAllClassRequests = async (req, res) => {
     let requests = await ClassRequest.find()
       .populate('studentId', 'name email profileImage grade school phone address')
       .populate('classId')
+      .populate('studentId','name email profileImage grade school phone address isOnline')
       .populate('teacherId', 'name subject');
 
     // ස්වයංක්‍රීය මාසික බ්ලොක් කිරීමේ ලොජික් එක ක්‍රියාත්මක කිරීම
