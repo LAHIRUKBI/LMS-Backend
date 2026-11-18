@@ -23,6 +23,7 @@ const adRoutes = require('./routes/adRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const noticeRoutes = require('./routes/noticeRoutes');
 const faqRoutes = require('./routes/faqRoutes');
+const physicalMarkRoutes = require('./routes/physicalMarkRoutes');
 
 const studentAuthRoutes = require('./routes/studentAuth');
 const freeCardRoutes = require('./routes/freeCardRoutes');
@@ -64,6 +65,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', noticeRoutes);
 app.use('/api/faqs', faqRoutes);
 app.use('/api/folders', require('./routes/folderRoutes'));
+app.use('/api/physical-marks', physicalMarkRoutes);
 
 // Student webaplication API routes
 app.use('/api/auth', studentAuthRoutes);
