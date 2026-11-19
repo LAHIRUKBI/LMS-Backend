@@ -96,6 +96,46 @@ const listAuthorizedPhysicalMarks = async (req, res) => {
 exports.getPhysicalMarks = listAuthorizedPhysicalMarks;
 exports.getPhysicalMarksByTeacher = listAuthorizedPhysicalMarks;
 
+// NEW: Return only result-card fields for one index number.
+// NOTE: This index-only endpoint is public. Anyone who guesses a valid index
+// can access that student's result; add verified student ownership checks
+// before using it for private student information in production.
+exports.getPhysicalMarksByIndex = async (req, res) => {
+  try {
+    const indexNumber = String(req.params.indexNumber || '').trim();
+
+    // Prevent empty, oversized, or control-character input.
+    if (!indexNumber || indexNumber.length > 60 || /[\x00-\x1f\x7f]/.test(indexNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid index number (maximum 60 characters).'
+      });
+    }
+
+    // Escape regex metacharacters so input is treated as an EXACT literal
+    // (case-insensitive, consistent with the existing React-side comparison).
+    const escapedIndex = indexNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const records = await PhysicalMark.find({
+      indexNumber: { $regex: `^${escapedIndex}$`, $options: 'i' }
+    })
+      .select('studentName instituteName subjectName className indexNumber marks grade')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Always return 200 for a successful query, even if no marks match.
+    // The existing frontend already displays the "No marks found" message
+    // when data is an empty array.
+    return res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    console.error('Error looking up physical marks by index:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve physical marks.'
+    });
+  }
+};
+
+
 // Admin-only list. If stored teacherId is known, use the CURRENT Teacher.name.
 // This also handles older records which stored Teacher.teacherId instead of MongoDB _id.
 exports.getAdminPhysicalMarks = async (req, res) => {
